@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { appConfig } from './app.config';
 import { SettingsStore } from './features/settings/settings-store';
+import { ApprovalService } from './features/approvals/approval-service';
 import { AGENT_CONFIG } from './mcp/agent/agent-config';
+import { HUMAN_APPROVAL_GATE } from './mcp/tooling/approval-gate';
 import { WIRE_SECRETS, WireTelemetryStore } from './mcp/telemetry/wire-telemetry-store';
 
 const KEY = 'AIza-test-key-0001';
@@ -20,6 +22,10 @@ describe('app config wiring', () => {
 
   it('serves the settings store as the agent config', () => {
     expect(TestBed.inject(AGENT_CONFIG)).toBe(TestBed.inject(SettingsStore));
+  });
+
+  it('exposes the approval service as the root gate', () => {
+    expect(TestBed.inject(HUMAN_APPROVAL_GATE)).toBe(TestBed.inject(ApprovalService));
   });
 
   it('feeds the live key to telemetry redaction', () => {
