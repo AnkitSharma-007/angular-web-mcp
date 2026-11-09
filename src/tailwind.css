@@ -68,3 +68,21 @@
 @utility row-selected {
   background-color: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
 }
+
+@utility chart-rect {
+  transition:
+    x 400ms ease-out,
+    width 400ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@utility chart-bar {
+  transition: width 400ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
