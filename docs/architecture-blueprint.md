@@ -1438,3 +1438,88 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - Added `field-errors`, `ui-tools.ts`, `core/models/proposal.ts` and `proposals-store.spec.ts`.
 - **Ready for Session 8:**
   - **BYOK & Gemini Agent.** It starts with 8.1 in the Session 8 block of this file. `SettingsStore` should provide `WIRE_SECRETS` (Session 5's note), `AgentSessionStore` can derive `awaiting-approval` from `ApprovalService.pending` (Session 6's note) and should use `McpToolGateway` for every registry call (this note).
+
+## Handoff Note: Session 8 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/mcp/agent/gemini/gemini-models.ts`:
+    - Types `GeminiModelId` (`'gemini-3.5-flash-lite' | 'gemini-3.8-flash' | 'gemini-4-argon'`), `ThinkingLevelName`, `ModelPersona`, `PriceEntry {from, inputPerM, outputPerM}` and `GeminiModel {id, persona, emoji, thinkingLevel, freeTier, role, priceSchedule}`.
+    - `GEMINI_MODELS` (catalog order: Sprinter, Operator, Strategist), `DEFAULT_MODEL_ID` (the Operator), `findModel(id)`, `priceAt(model, date)` (UTC day, last entry whose `from <= day`) and `estimateCostUsd(modelId, usage, at): number | undefined` (thinking is billed at the output rate; an unknown model gives `undefined`).
+  - `src/app/mcp/agent/gemini/genai-client.ts`:
+    - Own structural SDK types `GenAiClient`, `GenAiChat`, `GenAiConfig`, `GenAiPart`, `GenAiChunk`, `GenAiUsage`, `GenAiFunctionDeclaration`.
+    - `GENAI_CLIENT_FACTORY: InjectionToken<(apiKey) => Promise<GenAiClient>>` (root). The default factory does `await import('@google/genai')` and casts the real `GoogleGenAI`. **Always override this token in specs.**
+  - `src/app/mcp/agent/agent-config.ts`: `AgentConfig {apiKey: Signal<string>, model: Signal<string>}` and `AGENT_CONFIG` (no default). `app.config.ts` provides it as `useFactory: () => inject(SettingsStore)`.
+  - `src/app/mcp/agent/agent-events.ts`: `AgentEvent` (§4.5), `AgentErrorKind` and `AgentEventType`.
+  - `src/app/mcp/agent/system-prompt.ts`: `buildSystemPrompt(now: Date): string`.
+  - `src/app/mcp/agent/gemini/tool-adapter.ts`: `toFunctionDeclarations(tools)` (passes `inputSchema` through as `parametersJsonSchema`, and an empty or missing schema gives `{type: 'object', properties: {}}`) and `toFunctionResponse(call, result)` (`response` is `{output}` when ok and `{error}` otherwise).
+  - `src/app/mcp/agent/gemini/gemini-agent.ts`:
+    - `GeminiAgent` (`@Service()`, root, a **separate lazy chunk**, 8.27 kB). `run(prompt, {signal, model?, maxSteps?, runId?}): AsyncGenerator<AgentEvent>`. Resolve it with `injectAsync(() => import('.../gemini-agent').then(m => m.GeminiAgent))`.
+    - Also `MAX_AGENT_STEPS` (8), `NEXT_TOOL_WAIT_MS` (3000), `classifyError(error): {kind, message}`, `isAbort(error, signal)` and the type `AgentRunOptions`.
+  - `src/app/mcp/agent/agent-session-store.ts`: `AgentSessionStore` (`providedIn: 'root'`).
+    - State: `transcript: TranscriptEntry[]` (`{id, kind: 'user', text}` or `{id, kind: 'event', event}`), `phase`, `lastUsage`, `lastCostUsd` and `lastModel`.
+    - Computed: `status` (`'idle' | 'running' | 'awaiting-approval' | 'error'`) and `running`.
+    - Methods: `run(prompt, {model?, runId?}): Promise<void>` (ignored while running or when blank), `stop()` and `clear()` (aborts and resets).
+    - Also exports the types `SessionStatus`, `SessionPhase`, `TranscriptEntry` and `RunRequest`.
+  - `src/app/features/settings/settings-store.ts`: `SettingsStore` (root).
+    - State: `apiKey`, `remember`, `model`.
+    - Computed: `hasKey` and `keyStatus` (`'missing' | 'checking' | 'valid' | 'invalid' | 'unreachable'`).
+    - Props: `keyCheck`, a `resource<KeyVerdict, string | undefined>` that calls `models.list({config: {pageSize: 1, abortSignal}})`.
+    - Methods: `saveKey(key, remember)`, `setModel(id)` and `forgetKey()`.
+    - Also `toVerdict(error)`, `API_KEY_STORAGE_KEY` (`'awm.apiKey'`) and `MODEL_STORAGE_KEY` (`'awm.model'`).
+  - `src/app/features/settings/api-key-dialog-launcher.ts`: `ApiKeyDialogLauncher` (`@Service()`) with `open(): Promise<boolean>` (true when a key was saved). **Use this for Session 9's "open the dialog" error-card fix.**
+  - `src/app/features/settings/api-key-dialog.ts` / `.html`: `ApiKeyDialog` (lazy, loaded by the launcher) and `API_KEY_URL`.
+    - `data-testid`: `api-key`, `remember`, `key-status`, `forget`, `cancel`, `save`.
+  - `src/app/features/settings/model-picker.ts` / `.html`: `ModelPicker` (`<app-model-picker [(value)]="id" />`). It is an Aria `ngListbox` with `selectionMode="follow"`.
+    - `data-testid`: `model-<id>`, `free-badge`, `paid-badge`.
+  - `src/app/features/settings/byok-banner.ts` / `.html`: `ByokBanner` (`<app-byok-banner />`). It is rendered at the top of `DashboardShell` while there is no key. `data-testid`: `byok-banner`, `add-key`.
+  - `src/app/app.config.ts` now also provides:
+    - `AGENT_CONFIG`
+    - `WIRE_SECRETS` as `() => [settings.apiKey()]`
+    - **`HUMAN_APPROVAL_GATE` at the root** (`useExisting: ApprovalService`), so the root `AgentSessionStore` can see `gate.pending`. The `dashboard` route still provides it too.
+  - `src/app/app.html` / `app.ts`: a toolbar button `data-testid="open-key-dialog"` that opens the dialog (`key` or `key_off` icon).
+  - `src/testing/fake-genai.ts`:
+    - `FakeGenAI(script = [], apiKey?)` implements `GenAiClient`. Script entries are a `FakeTurn` or a function `(request) => FakeTurn`, and `push()` adds more.
+    - A `FakeTurn` is `{thoughts?, text?: string | string[], functionCalls?: {name, args?, id?}[], usage?, error?, hold?: Promise<void>}`.
+    - Inspect with `requests` (`{model, message, config, chat}`), `createdChats` (a `FakeChat` has `history`, `model`, `createConfig`), `listCalls`, `listError` and `listHold`.
+    - Also `FakeApiError(status, message)`, `abortError()` and `fakeGenAiFactory(client)`.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (607 tests; statements 98.89 %, branches 96.16 %, functions 97.66 %, lines 98.95 %), `npm run build` and `prettier --check src` pass on each of the 3 commits. 8.2 had no specs of its own beyond one added to `app.config.spec.ts`, and 8.3 added all the agent and store scenarios (coverage was 86 % between the two commits).
+  - **Not verified in a real browser or against the real Gemini API:** the key dialog, picker, banner, CSP and the agent against a live key were only exercised in jsdom with `FakeGenAI`. Running Chrome against a built `dist` was blocked in this session. Do this before the talk: `npm run build`, serve `dist/angular-web-mcp/browser`, check the console for CSP violations, then run a real prompt with an AI Studio key.
+  - **A10 failed as written, so the CSP is split.** Two CSP `<meta>` tags are both enforced, so a `script-src 'self'` meta would block the hashed inline loader scripts that `autoCsp` injects. `angular.json` production has `security.autoCsp: true` (it owns the script policy). `src/index.html` carries a second meta **without `default-src` and `script-src`**: `style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://generativelanguage.googleapis.com; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'`. In `ng serve` only the hand-written meta applies. If `autoCsp` ever breaks the app, the fallback is `optimization.styles.inlineCritical: false` plus a `script-src 'self'` meta.
+  - **A8 held in the types** (`@google/genai` 3.0.0): `thinkingConfig.{thinkingLevel, includeThoughts}`, `abortSignal` inside `GenerateContentConfig`, `parametersJsonSchema` and `thoughtsTokenCount` all exist. **The per-request `config` on `sendMessageStream` does not inherit the chat config**, so the agent repeats the whole config (system prompt, tools, thinking, `automaticFunctionCalling.disable`, `abortSignal`) on every request. The thinking level is sent as the enum string (`'LOW' | 'MEDIUM' | 'HIGH'`). It was not run against the live API, so confirm the model IDs and `thinkingLevel` are accepted.
+  - **A9 held:** `ngListbox` single-select works through `value` as a one-item array (`[value]` plus `(valueChange)`). The harness import is `@angular/aria/listbox/testing`, with a slash. Keyboard selection is tested by dispatching `keydown` on the listbox element.
+  - **Bundle:** the initial total is 636.34 kB (was 622.86 kB), still warning-only. `@google/genai` stays out of the initial chunk (a 410 kB lazy chunk). The build prints a warning that `p-retry` (a dependency of the SDK) is not ESM. It is harmless.
+  - **The agent is tree-shaken until something references `AgentSessionStore`.** The lazy-chunk acceptance was checked by temporarily injecting the store in `App` (a `gemini-agent` chunk of 8.27 kB appeared), then reverting. Session 9's console will pull it in for real.
+  - **`nextTool` handling:** when an OK tool result is an object with a string `nextTool`, the agent calls `gateway.waitForTool(nextTool, 3000, signal)` before the next request. `openProposalDrawer` already returns `nextTool: 'draftDealProposal'`, which fixes the timing caveat in Session 7's note. Otherwise the tool list is re-read at the top of each step whenever `gateway.toolsVersion()` changed, which emits a `tools-changed` event.
+  - **Tool calls run sequentially in the model's order**, not in parallel, so approvals can't collide. Each is `tool-call` then `tool-result`. A function call without an ID gets `step-<n>-call-<i>`.
+  - **`awaiting-approval` is emitted by the store, not the agent.** The store's effect appends an `awaiting-approval` entry when `gate.pending` becomes non-null during a run. The agent never yields that event.
+  - **Abort:** a stop yields nothing further (no `error`, no `done`) and settles the open `generateContent` packet as an error with `'aborted'`. The signal reaches pending approvals through `gateway.callTool(name, args, signal)`. The store drops events that arrive after an abort and ignores a finished old run when a newer one has started.
+  - **Telemetry:**
+    - Each model request is one `llm` `generateContent` packet with `model`, `tokens`, `costUsd` and `runId`.
+    - The request params carry the prompt or function responses, and **redaction runs on these through `WIRE_SECRETS`**. The error `message` in the event is redacted with the key too.
+    - Tool calls are counted once (the gateway skips `defineTool` tools).
+    - The agent calls `gateway.listTools()` once at the start (one `tools/list` packet) and again after each tool change.
+  - **Error mapping (`classifyError`):**
+    - 429 → `quota`
+    - 404 → `model-access`
+    - 401 → `auth`
+    - 403 → `model-access` only when the message mentions the model and not the key, otherwise `auth`
+    - 400 with "api key" → `auth`
+    - no status and a `TypeError` or "failed to fetch" / "network" → `network`
+    - anything else → `unknown`
+    - A JSON body such as `{"error":{"message":…}}` is unwrapped to its message.
+  - **`keyCheck`:** 400, 401 and 403 from `models.list` → `invalid`. 429 counts as a **valid** key (rate limited). Anything else → `unreachable`. The check runs on every key change, and the resource aborts the previous request.
+  - **Storage:** the key goes to `sessionStorage` always and to `localStorage` only with "Remember". The model choice is stored in `localStorage`. Every access is wrapped in `guarded()`.
+  - **Testing tips:**
+    - Store specs with a resource: `await vi.waitFor(() => { TestBed.tick(); expect(store.keyStatus()).not.toBe('checking'); })`.
+    - For `AgentSessionStore`, override `GeminiAgent` with `{provide: GeminiAgent, useFactory: () => fakeAgent}`. `injectAsync` resolves the class token through the injector, so the override works and a counter in the factory proves the lazy single load.
+    - For `GeminiAgent`, provide `GENAI_CLIENT_FACTORY` (`fakeGenAiFactory(fake)`), `AGENT_CONFIG`, `WIRE_SECRETS` and a ticking `CLOCK`, and register tools through `useFakeModelContext()`.
+    - An `untilAborted` fake generator must check `signal.aborted` before listening, because a stop can arrive before the generator starts.
+  - **Blueprint deviations (non-functional):**
+    - The settings store/dialog also got `ApiKeyDialogLauncher`, a toolbar button, `byok-banner.spec.ts`, `app.config.spec.ts`, `genai-client.spec.ts` and `system-prompt.spec.ts`.
+    - `app.spec.ts` now selects the theme button by its aria-label, because the key button is first in the toolbar.
+    - `AgentSessionStore` is root as in §3.5, so the gate had to move to the root (see above).
+    - Run IDs: the agent only tags its own `llm` packets with `runId`. Session 9.2 must tag the others.
+    - `src/testing/fake-genai.ts` was created in 8.1 (the blueprint lists it under 8.3) because the settings store specs needed `models.list`.
+- **Ready for Session 9:**
+  - **Agent Console & Lab.** It starts with 9.1 in the Session 9 block of this file. The console should read `AgentSessionStore` (`transcript`, `status`, `run`, `stop`, `lastUsage`, `lastCostUsd`), use `ApiKeyDialogLauncher.open()` for the `auth` error card, `SettingsStore.setModel` for the `model-access` fix, and `LayoutStore` for the hotkeys.
