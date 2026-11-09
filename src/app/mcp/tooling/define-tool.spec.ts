@@ -147,7 +147,7 @@ describe('defineTool', () => {
     it('rejects a risky call when no gate is provided (fail-safe)', async () => {
       setup();
       const run = vi.fn();
-      const snapshot = vi.fn();
+      const snapshot = { recordSnapshot: vi.fn() };
       const result = await invoke(tool({ risk: () => REQUEST, run, snapshot }), {
         dealId: 'D-1001',
       });
@@ -156,7 +156,7 @@ describe('defineTool', () => {
         note: 'no human approval gate is available',
       });
       expect(run).not.toHaveBeenCalled();
-      expect(snapshot).not.toHaveBeenCalled();
+      expect(snapshot.recordSnapshot).not.toHaveBeenCalled();
       expect(end).toHaveBeenCalledWith('rejected', expect.any(Object));
     });
 
@@ -164,13 +164,13 @@ describe('defineTool', () => {
       const request = vi.fn().mockResolvedValue({ approved: false, note: 'too aggressive' });
       setup({ request });
       const run = vi.fn();
-      const snapshot = vi.fn();
+      const snapshot = { recordSnapshot: vi.fn() };
       const result = await invoke(tool({ risk: () => REQUEST, run, snapshot }), {
         dealId: 'D-1001',
       });
       expect(parse(result)).toEqual({ status: 'rejected_by_human', note: 'too aggressive' });
       expect(run).not.toHaveBeenCalled();
-      expect(snapshot).not.toHaveBeenCalled();
+      expect(snapshot.recordSnapshot).not.toHaveBeenCalled();
     });
 
     it('omits the note when the human gave none', async () => {
@@ -190,7 +190,12 @@ describe('defineTool', () => {
       await invoke(
         tool({
           risk: () => REQUEST,
-          snapshot: () => void order.push('snapshot'),
+          snapshot: {
+            recordSnapshot: () => {
+              order.push('snapshot');
+              return 'h-1';
+            },
+          },
           run: () => void order.push('run'),
         }),
         { dealId: 'D-1001' },
@@ -198,6 +203,44 @@ describe('defineTool', () => {
       );
       expect(order).toEqual(['approval', 'snapshot', 'run']);
       expect(request).toHaveBeenCalledWith(REQUEST, controller.signal);
+    });
+  });
+
+  describe('snapshots', () => {
+    it('records a labelled snapshot before run and exposes its id to the body', async () => {
+      setup();
+      const recordSnapshot = vi.fn(() => 'h-7');
+      const run = vi.fn((_args: Args, ctx: { snapshotId?: string }) => ctx.snapshotId);
+      const result = await invoke(
+        tool({
+          snapshot: { recordSnapshot },
+          snapshotLabel: ({ dealId }) => `change ${dealId}`,
+          run,
+        }),
+        { dealId: 'D-1001' },
+      );
+      expect(recordSnapshot).toHaveBeenCalledExactlyOnceWith('change D-1001');
+      expect(parse(result)).toBe('h-7');
+    });
+
+    it('falls back to the title, then the name, as the label', async () => {
+      setup();
+      const recordSnapshot = vi.fn(() => 'h-1');
+      await invoke(tool({ snapshot: { recordSnapshot }, title: 'Probe tool' }), {
+        dealId: 'D-1001',
+      });
+      await invoke(tool({ snapshot: { recordSnapshot } }), { dealId: 'D-1001' });
+      expect(recordSnapshot.mock.calls).toEqual([['Probe tool'], ['probe']]);
+    });
+
+    it('does not snapshot when validation fails or the tool has no snapshot target', async () => {
+      setup();
+      const recordSnapshot = vi.fn(() => 'h-1');
+      await expect(
+        invoke(tool({ snapshot: { recordSnapshot } }), { dealId: 'nope' }),
+      ).rejects.toThrow(ToolInputError);
+      await invoke(tool(), { dealId: 'D-1001' });
+      expect(recordSnapshot).not.toHaveBeenCalled();
     });
   });
 

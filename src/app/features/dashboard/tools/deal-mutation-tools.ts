@@ -8,9 +8,10 @@ import {
   type Region,
 } from '../../../core/models/deal';
 import type { MutationResult } from '../../../core/models/mutation-result';
+import type { HistoryEntry } from '../../../core/store-features/with-agent-history';
 import { formatCompactCurrency, roundMoney } from '../../../core/util/money';
 import type { ApprovalRequest } from '../../../mcp/tooling/approval-gate';
-import { defineTool } from '../../../mcp/tooling/define-tool';
+import { defineTool, type ToolContext } from '../../../mcp/tooling/define-tool';
 import { UndoNotifier } from '../../history/undo-notifier';
 import type { StageUpdate } from '../data/with-deals';
 import { assessDiscount, assessStageMoves, discountImpact } from './risk-policy';
@@ -24,6 +25,7 @@ export interface DealMutationStore {
   applyDiscount(dealIds: readonly string[], discountPct: number): MutationResult<number>;
   moveStages(updates: readonly StageUpdate[]): MutationResult<DealStage>;
   recordSnapshot(label: string): string;
+  undoTo(id: string): HistoryEntry | null;
 }
 
 type Outcome = 'applied' | 'partial' | 'no_change';
@@ -71,6 +73,9 @@ interface StageArgs {
 }
 
 export function dealMutationTools(store: DealMutationStore): WebMcpToolDescriptor[] {
+  const undoer = ({ snapshotId }: ToolContext) =>
+    snapshotId === undefined ? undefined : () => store.undoTo(snapshotId);
+
   const setDealFilter = defineTool<FilterArgs>({
     name: 'setDealFilter',
     title: 'Set deal filter',
@@ -143,10 +148,10 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
             details: { policy: assessment.flags, changes: assessment.changes },
           };
     },
-    snapshot: ({ dealIds, discountPct }) => {
-      store.recordSnapshot(`${discountPct}% discount on ${plural(unique(dealIds).length, 'deal')}`);
-    },
-    run: ({ dealIds, discountPct }, _ctx, notifier) => {
+    snapshot: store,
+    snapshotLabel: ({ dealIds, discountPct }) =>
+      `${discountPct}% discount on ${plural(unique(dealIds).length, 'deal')}`,
+    run: ({ dealIds, discountPct }, ctx, notifier) => {
       const { changed, skipped } = store.applyDiscount(unique(dealIds), discountPct);
       const revenueImpact = roundMoney(
         changed.reduce(
@@ -158,6 +163,7 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
       if (changed.length > 0) {
         notifier.announce(
           `Agent set a ${discountPct}% discount on ${plural(changed.length, 'deal')}`,
+          undoer(ctx),
         );
       }
       return { status: outcome(changed.length, skipped.length), changed, skipped, revenueImpact };
@@ -206,13 +212,16 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
             details: { policy: assessment.flags, deals: assessment.flaggedDeals },
           };
     },
-    snapshot: ({ updates }) => {
-      store.recordSnapshot(`Stage updates on ${plural(lastPerDeal(updates).length, 'deal')}`);
-    },
-    run: ({ updates }, _ctx, notifier) => {
+    snapshot: store,
+    snapshotLabel: ({ updates }) =>
+      `Stage updates on ${plural(lastPerDeal(updates).length, 'deal')}`,
+    run: ({ updates }, ctx, notifier) => {
       const { changed, skipped } = store.moveStages(lastPerDeal(updates));
       if (changed.length > 0) {
-        notifier.announce(`Agent moved ${plural(changed.length, 'deal')} to a new stage`);
+        notifier.announce(
+          `Agent moved ${plural(changed.length, 'deal')} to a new stage`,
+          undoer(ctx),
+        );
       }
       return { status: outcome(changed.length, skipped.length), moved: changed, skipped };
     },

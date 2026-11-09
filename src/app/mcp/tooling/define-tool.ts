@@ -2,12 +2,14 @@ import { inject, type WebMcpToolDescriptor } from '@angular/core';
 import { CLOCK } from '../../core/util/clock';
 import type { JsonSchema } from '../schema/validate-args';
 import { HUMAN_APPROVAL_GATE, type ApprovalRequest } from './approval-gate';
+import { takeSnapshot, type Snapshotter } from './with-snapshot';
 import { TOOL_TELEMETRY, type ToolStatus } from './with-telemetry';
 import { validateToolArgs } from './with-validation';
 
 export interface ToolContext {
   signal: AbortSignal;
   now(): Date;
+  snapshotId?: string;
 }
 
 export interface ToolDefinition<A, D = void> {
@@ -18,7 +20,8 @@ export interface ToolDefinition<A, D = void> {
   annotations?: WebMcpToolDescriptor['annotations'];
   deps?: () => D;
   risk?: (args: A) => ApprovalRequest | null;
-  snapshot?: (args: A) => void;
+  snapshot?: Snapshotter;
+  snapshotLabel?: (args: A) => string;
   run: (args: A, ctx: ToolContext, deps: D) => unknown;
 }
 
@@ -72,7 +75,12 @@ export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDe
           }
         }
 
-        def.snapshot?.(args);
+        if (def.snapshot) {
+          ctx.snapshotId = takeSnapshot(
+            { target: def.snapshot, label: def.snapshotLabel ?? (() => def.title ?? def.name) },
+            args,
+          );
+        }
         const value = await def.run(args, ctx, deps);
         finish('ok', { result: value ?? null });
         return toToolResult(value);

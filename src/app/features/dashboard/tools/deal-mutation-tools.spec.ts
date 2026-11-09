@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { Subject } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SEED_DEALS } from '../../../core/data/seed-deals';
 import { EMPTY_FILTER, isOpen } from '../../../core/models/deal';
@@ -11,6 +12,7 @@ import {
   type ApprovalRequest,
 } from '../../../mcp/tooling/approval-gate';
 import { useFakeModelContext } from '../../../../testing/test-providers';
+import { WireTelemetryStore } from '../../../mcp/telemetry/wire-telemetry-store';
 import { DealsStore } from '../data/deals-store';
 
 const EMEA_NEGOTIATION = ['D-1004', 'D-1005', 'D-1006', 'D-1007'];
@@ -26,13 +28,19 @@ interface MutationOutput {
 
 describe('deal mutation tools', () => {
   const registry = useFakeModelContext();
-  const open = vi.fn();
+  let actions: Subject<void>[] = [];
+  const open = vi.fn<(message: string, action?: string, config?: unknown) => unknown>(() => {
+    const action = new Subject<void>();
+    actions.push(action);
+    return { onAction: () => action };
+  });
   const request =
     vi.fn<(request: ApprovalRequest, signal: AbortSignal) => Promise<ApprovalDecision>>();
   let store: InstanceType<typeof DealsStore>;
 
   function setup(withGate: boolean) {
-    open.mockReset();
+    open.mockClear();
+    actions = [];
     request.mockReset();
     TestBed.configureTestingModule({
       providers: [
@@ -256,6 +264,46 @@ describe('deal mutation tools', () => {
         reason: REASON,
       });
       expect(open).not.toHaveBeenCalled();
+    });
+
+    it('restores the exact state and records a packet when the snackbar Undo is pressed', async () => {
+      setup(false);
+      const before = discounts();
+      await call('applyBatchDiscount', { dealIds: ['D-1002'], discountPct: 5, reason: REASON });
+      expect(store.entityMap()['D-1002']?.discountPct).toBe(5);
+      expect(open.mock.calls[0]).toEqual([
+        'Agent set a 5% discount on 1 deal',
+        'Undo',
+        expect.any(Object),
+      ]);
+
+      actions[0]?.next();
+
+      expect(discounts()).toEqual(before);
+      expect(store.canUndo()).toBe(false);
+      const packets = TestBed.inject(WireTelemetryStore).entities();
+      expect(packets.map((packet) => packet.method)).toEqual(['tools/call', 'human/undo']);
+    });
+
+    it('ignores a stale Undo press once its entry is gone', async () => {
+      setup(false);
+      await call('applyBatchDiscount', { dealIds: ['D-1002'], discountPct: 5, reason: REASON });
+      actions[0]?.next();
+      actions[0]?.next();
+      const undos = TestBed.inject(WireTelemetryStore)
+        .entities()
+        .filter((packet) => packet.method === 'human/undo');
+      expect(undos).toHaveLength(1);
+    });
+
+    it('offers Undo for stage updates as well', async () => {
+      setup(false);
+      await call('updateDealStages', {
+        updates: [{ dealId: 'D-1002', stage: 'proposal' }],
+        reason: REASON,
+      });
+      actions[0]?.next();
+      expect(store.entityMap()['D-1002']?.stage).toBe('negotiation');
     });
 
     it('singularises the snackbar for one deal', async () => {

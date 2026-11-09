@@ -1,0 +1,31 @@
+@if (entries().length > 0) {
+  <section aria-labelledby="agent-history-title" class="glass rounded-2xl p-4">
+    <h2 id="agent-history-title" class="mb-1 text-base font-semibold text-on-surface">
+      Agent changes
+    </h2>
+    <p class="mb-3 text-sm text-on-surface-variant">
+      Only you can undo. Restoring a step also reverts everything the agent did after it.
+    </p>
+    <ol aria-label="Agent change history" class="m-0 flex list-none flex-col gap-1 p-0">
+      @for (entry of entries(); track entry.id) {
+        <li class="flex items-center gap-3" [attr.data-entry-id]="entry.id">
+          <mat-icon class="text-on-surface-variant" aria-hidden="true">history</mat-icon>
+          <span class="flex-1 text-sm text-on-surface" data-testid="entry-label">{{
+            entry.label
+          }}</span>
+          <time class="text-xs text-on-surface-variant" [attr.datetime]="entry.at">
+            {{ entry.at | date: 'mediumTime' }}
+          </time>
+          <button
+            mat-button
+            type="button"
+            [attr.aria-label]="'Undo to here: ' + entry.label"
+            (click)="undoTo(entry.id)"
+          >
+            Undo to here
+          </button>
+        </li>
+      }
+    </ol>
+  </section>
+}
