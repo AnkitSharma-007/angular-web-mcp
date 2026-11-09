@@ -1110,3 +1110,66 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - `npm audit` reports advisories on dev dependencies at install time. Nothing was changed, since the pins are mandated by §0.1. Revisit near release.
 - **Ready for Session 2:**
   - **Domain & SignalStore.** It covers 2.1 (deal model, deterministic seed, money utilities, `compact-currency` pipe, `stage-badge`, `npm i -E @ngrx/signals@22.0.1`), 2.2 (`withDeals`, `withAgentHistory` and the A7 spike) and 2.3 (the store tests).
+
+## Handoff Note: Session 2 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/core/models/deal.ts`:
+    - Types: `Deal`, `DealFilter`, `DealStage`, `Region`, `ContractStatus`.
+    - Constants: `DEAL_STAGES` and `REGIONS` (ordered `as const` arrays), `DEAL_STAGE_LABELS`, `EMPTY_FILTER`, `MAX_DISCOUNT_PCT` (50), `STALLED_AFTER_DAYS` (21), `AT_RISK_PROBABILITY` (25).
+    - Predicates: `isClosedStage(stage)`, `isOpen(deal)`, `isStalled(deal)` (open and idle ≥ 21 days), `isAtRisk(deal)` (open and (stalled or probability < 25)).
+  - `src/app/core/models/mutation-result.ts`: `Change<T> {id, before, after}`, `Skip {id, why}`, `MutationResult<T> {changed, skipped}`.
+  - `src/app/core/data/seed-deals.ts`: `SEED_DEALS` (readonly, `D-1001…D-1024`) and `createSeedDeals()` (fresh mutable copies). Anchors:
+    - Arcadia Bank is `D-1002`, NA, negotiation, $420k, 0 %.
+    - Konkan Freight is `D-1001` and Monsoon Retail is `D-1003`, both closed-won with an active contract.
+    - The EMEA negotiation deals are `D-1004` (82 %), `D-1005` (76 %), `D-1006` and `D-1007`. A 10 % discount on all four is about $140k, which is under the $250k approval threshold.
+    - The stalled deals are `D-1018`, `D-1019`, `D-1020` and `D-1021`.
+    - Konkan's contact is `procurement@konkan-freight.example`.
+  - `src/app/core/util/money.ts`: `roundMoney` (to cents), `netValue({listValue, discountPct})`, `formatCompactCurrency` (`$420k`, `$1.4M`, `$2.5B`, negative-safe).
+  - `src/app/core/util/clock.ts`: `CLOCK` (`InjectionToken<() => Date>`, root-provided, defaults to `new Date()`), `type Clock`. Override it in tests with `{ provide: CLOCK, useValue: () => new Date(...) }`.
+  - `src/app/core/store-features/with-agent-history.ts`: `withAgentHistory({ capacity })`.
+    - State: `history: HistoryEntry[]` (`{id, label, at, snapshot}`).
+    - Computed: `canUndo`, `lastEntry` (`null` when empty).
+    - Methods: `recordSnapshot(label): string` (returns the entry id), `undo(): HistoryEntry | null`, `undoTo(id): HistoryEntry | null`, `clearHistory()`.
+    - Also exports `HistoryEntry`, `AgentHistoryState`, `AgentHistoryOptions`.
+  - `src/app/features/dashboard/data/deal-analytics.ts`: pure functions.
+    - `applyFilter`, `searchDeals`, `byStage`, `byRegion`, `computeKpis`, `matchesQuery`.
+    - Types `Breakdown<K> {key, count, netValue, pct}` and `Kpis {openDeals, openValue, weightedForecast, wonValue, winRate, stalledCount}`.
+    - Types `DealSearch` and `DealSearchResult {total, deals}`, plus `DEFAULT_SEARCH_LIMIT` (25).
+  - `src/app/features/dashboard/data/with-deals.ts`: `withDeals()` and `clampDiscount`. Also exports `StageUpdate {dealId, stage}`.
+    - Entities plus `filter` state.
+    - Computed: `filteredDeals`, `pipelineByStage`, `byRegion`, `kpis`, `atRiskDeals`.
+    - Methods:
+      - `setFilter(partial)`: merges into the current filter.
+      - `clearFilter()`.
+      - `search(criteria)`: ignores the view filter. It sorts by net value descending and then id, and caps at `limit` (default 25).
+      - `applyDiscount(ids, pct): MutationResult<number>`.
+      - `moveStages(updates): MutationResult<DealStage>`.
+      - `terminateContract(id): MutationResult<ContractStatus>`.
+      - `reset()`.
+  - `src/app/features/dashboard/data/deals-store.ts`: `DealsStore = signalStore(withDeals(), withAgentHistory({ capacity: 20 }), withHooks({ onInit: reset }))`. It is **not** `providedIn: 'root'`, so the dashboard route must list it in `providers` (D12). Session 5 adds `withFeature((store) => withWebMcpTools(() => dealMutationTools(store)))`.
+  - `src/app/shared/pipes/compact-currency.ts`: `CompactCurrencyPipe` (`compactCurrency`). It returns `''` for null or undefined.
+  - `src/app/shared/ui/stage-badge/stage-badge.ts`: `StageBadge` (`<app-stage-badge [stage]="…" />`). It has a required `stage` input and sets `data-stage` on the host.
+  - `src/testing/deal-fixtures.ts`: `makeDeal(overrides)` builds a valid `Deal` with the id `D-2001`.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (138 tests; lines 100 %, branches 98 %, functions 100 %) and `npm run build` all pass. The `@ngrx/signals@22.0.1` pin is installed.
+  - **A7 verified:** `inject()` works inside both `withHooks(() => …)` factories and `withFeature(() => …)` factories (spike tests in `deals-store.spec.ts`). The `withMethods` factory also runs in an injection context, and `withAgentHistory` uses `inject(CLOCK)` there. No `Injector`-through-`withProps` fallback is needed.
+  - **Undo restores all state, not only the entities.** The snapshot is `structuredClone(getState(store))` without `history`, so it includes `filter`. Undoing after a filter change reverts the filter to its value at snapshot time. Session 6's undo UI should expect this.
+  - **Mutation semantics:**
+    - A no-op discount (same value) goes to `skipped` with `already at N%`. Only actual changes appear in `changed`, so `revenueImpact` can be computed from `changed` alone.
+    - Closing a deal as `closed-won` sets `probability` to 100 and `contractStatus` to `'active'`. `closed-lost` sets `probability` to 0.
+    - Discounts are allowed on closed deals. The blueprint didn't forbid it, and a guard could break Act 2 if the model orders its calls differently.
+    - `terminateContract` doesn't record a timestamp. The tool should use `CLOCK` for `terminatedAt`.
+    - `moveStages` keeps the `skipped.why` strings `unknown deal`, `closed deals cannot be reopened` and `already in <stage>`.
+  - **`winRate` is a percentage** (60, not 0.6), rounded to one decimal. `pct` in breakdowns is the share of **net value** (not deal count), rounded to one decimal, so the bars react to discounts.
+  - **Testing the store:**
+    - Provide the store with `TestBed.configureTestingModule({ providers: [DealsStore] })` and call `TestBed.inject`.
+    - To seed arbitrary data, use `patchState(unprotected(store), setAllEntities<Deal>([...]))` with `unprotected` from `@ngrx/signals/testing`. Pass the `<Deal>` generic, because `setAllEntities([])` otherwise infers `never`.
+    - `updateEntity` also needs an explicit `<Deal>` generic inside `patchState`.
+  - **Layering:** `shared` imports types and utilities from `core` (`stage-badge`, `compact-currency`). The lint rule only blocks `mcp` and `features`, and the badge needs `DealStage`.
+  - **Typing:** `target` is ES2022, so `findLastIndex` and other ES2023 array methods aren't in the lib.
+  - **a11y in specs:** axe's `region` rule fires on a bare element in `document.body`. Wrap the rendered component in a `<main>` (see `stage-badge.spec.ts`).
+  - **Seed file formatting:** Prettier expands each seed tuple over several lines, so `seed-deals.ts` is long but is the formatter's output.
+  - **Blueprint deviation (non-functional):** to keep commit 2.2 above the coverage gate, it shipped smoke specs (`with-deals.spec.ts`, `deals-store.spec.ts`). Commit 2.3 replaced them with the full scenarios and added `with-agent-history.spec.ts` against a minimal store. I also added `core/models/mutation-result.ts` and `features/dashboard/data/deal-analytics.ts` (pure helpers), which the blueprint doesn't list.
+- **Ready for Session 3:**
+  - **Dashboard Views.** It starts with 3.1: `feat(dashboard): add route shell, KPI strip and Material deals table with debounced search`. Fill `app.routes.ts` and provide `DealsStore` in the `/dashboard` route `providers`.
