@@ -4,7 +4,10 @@ import type { Deal } from '../../../core/models/deal';
 import { DealsStore } from './deals-store';
 
 export const DashboardUiStore = signalStore(
-  withState({ proposalOpen: false }),
+  withState<{ proposalOpen: boolean; proposalDealId: string | null }>({
+    proposalOpen: false,
+    proposalDealId: null,
+  }),
   withLinkedState(() => ({
     selectedDealId: linkedSignal<readonly Deal[], string | null>({
       source: inject(DealsStore).filteredDeals,
@@ -16,11 +19,14 @@ export const DashboardUiStore = signalStore(
     selectDeal(dealId: string | null): void {
       patchState(store, { selectedDealId: dealId });
     },
-    openProposal(): void {
-      patchState(store, { proposalOpen: true });
+    openProposal(dealId?: string): void {
+      patchState(store, (state) => ({
+        proposalOpen: true,
+        proposalDealId: dealId ?? state.proposalDealId,
+      }));
     },
     closeProposal(): void {
-      patchState(store, { proposalOpen: false });
+      patchState(store, { proposalOpen: false, proposalDealId: null });
     },
   })),
 );

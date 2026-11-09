@@ -21,3 +21,6 @@
   </a>
 </nav>
 <router-outlet />
+@if (ui.proposalOpen()) {
+  <app-proposal-drawer />
+}

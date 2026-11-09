@@ -86,3 +86,27 @@
     transition: none;
   }
 }
+
+@keyframes agent-fill {
+  from {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 75%, transparent),
+      0 0 18px color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@utility agent-glow {
+  border-radius: 0.5rem;
+
+  &[data-agent-filled] {
+    animation: agent-fill 1.2s ease-out;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      outline: 2px solid color-mix(in srgb, var(--mat-sys-primary) 60%, transparent);
+    }
+  }
+}

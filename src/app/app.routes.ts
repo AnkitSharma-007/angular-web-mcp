@@ -5,6 +5,7 @@ import { HUMAN_APPROVAL_GATE } from './mcp/tooling/approval-gate';
 import { DEAL_CONTEXT_TOOLS } from './features/dashboard/tools/deal-context-tools';
 import { DashboardUiStore } from './features/dashboard/data/dashboard-ui-store';
 import { DealsStore } from './features/dashboard/data/deals-store';
+import { ProposalsStore } from './features/proposal/proposals-store';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -13,6 +14,7 @@ export const routes: Routes = [
     providers: [
       DealsStore,
       DashboardUiStore,
+      ProposalsStore,
       { provide: HUMAN_APPROVAL_GATE, useExisting: ApprovalService },
       provideExperimentalWebMcpTools(DEAL_CONTEXT_TOOLS),
     ],

@@ -1,0 +1,221 @@
+<header class="flex items-center gap-2 border-b border-outline-variant px-5 py-4">
+  <mat-icon aria-hidden="true">description</mat-icon>
+  <h2
+    #heading
+    id="proposal-title"
+    tabindex="-1"
+    class="m-0 text-lg font-semibold text-on-surface outline-none"
+  >
+    Draft proposal
+  </h2>
+  <button
+    mat-icon-button
+    type="button"
+    class="ml-auto"
+    aria-label="Close proposal drawer"
+    data-testid="close"
+    (click)="close()"
+  >
+    <mat-icon>close</mat-icon>
+  </button>
+</header>
+
+<form
+  [formRoot]="proposalForm"
+  aria-labelledby="proposal-title"
+  class="flex min-h-0 flex-1 flex-col"
+>
+  <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+    <div role="status" aria-live="polite" data-testid="banner">
+      @if (proposalForm().submitting()) {
+        <p class="m-0 text-sm text-on-surface-variant">Submitting…</p>
+      } @else if (saved(); as draft) {
+        <p class="m-0 text-sm text-success" data-testid="saved">
+          Draft {{ draft.id }} saved for {{ draft.clientName }}.
+        </p>
+      } @else if (problems().length > 0) {
+        <div class="text-sm text-error" data-testid="problems">
+          <p class="m-0 font-medium">Fix these before saving:</p>
+          <ul class="m-0 pl-5">
+            @for (problem of problems(); track $index) {
+              <li>{{ problem.label }}: {{ problem.message }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+
+    <div>
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="agent-glow w-full"
+        [attr.data-agent-filled]="filled().has('dealId') ? '' : null"
+      >
+        <mat-label>Deal ID</mat-label>
+        <input
+          matInput
+          data-field="dealId"
+          list="proposal-deals"
+          autocomplete="off"
+          [formField]="proposalForm.dealId"
+        />
+      </mat-form-field>
+      <datalist id="proposal-deals">
+        @for (deal of dealOptions(); track deal.id) {
+          <option [value]="deal.id">{{ deal.account }}</option>
+        }
+      </datalist>
+      <app-field-errors [field]="proposalForm.dealId" />
+    </div>
+
+    <div>
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="agent-glow w-full"
+        [attr.data-agent-filled]="filled().has('clientName') ? '' : null"
+      >
+        <mat-label>Client name</mat-label>
+        <input matInput data-field="clientName" [formField]="proposalForm.clientName" />
+      </mat-form-field>
+      <app-field-errors [field]="proposalForm.clientName" />
+    </div>
+
+    <div>
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="agent-glow w-full"
+        [attr.data-agent-filled]="filled().has('contactEmail') ? '' : null"
+      >
+        <mat-label>Contact email</mat-label>
+        <input
+          matInput
+          type="email"
+          data-field="contactEmail"
+          [formField]="proposalForm.contactEmail"
+        />
+      </mat-form-field>
+      <app-field-errors [field]="proposalForm.contactEmail" />
+    </div>
+
+    <div>
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="agent-glow w-full"
+        [attr.data-agent-filled]="filled().has('productTier') ? '' : null"
+      >
+        <mat-label>Product tier</mat-label>
+        <select matNativeControl data-field="productTier" [formField]="proposalForm.productTier">
+          @for (tier of tiers; track tier) {
+            <option [value]="tier">{{ tier }}</option>
+          }
+        </select>
+      </mat-form-field>
+      <app-field-errors [field]="proposalForm.productTier" />
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+      <div>
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
+          class="agent-glow w-full"
+          [attr.data-agent-filled]="filled().has('seats') ? '' : null"
+        >
+          <mat-label>Seats</mat-label>
+          <input matInput type="number" data-field="seats" [formField]="proposalForm.seats" />
+        </mat-form-field>
+        <app-field-errors [field]="proposalForm.seats" />
+      </div>
+      <div>
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
+          class="agent-glow w-full"
+          [attr.data-agent-filled]="filled().has('termMonths') ? '' : null"
+        >
+          <mat-label>Term (months)</mat-label>
+          <input
+            matInput
+            type="number"
+            data-field="termMonths"
+            [formField]="proposalForm.termMonths"
+          />
+        </mat-form-field>
+        <app-field-errors [field]="proposalForm.termMonths" />
+      </div>
+      <div>
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
+          class="agent-glow w-full"
+          [attr.data-agent-filled]="filled().has('discountPct') ? '' : null"
+        >
+          <mat-label>Discount (%)</mat-label>
+          <input
+            matInput
+            type="number"
+            data-field="discountPct"
+            [formField]="proposalForm.discountPct"
+          />
+        </mat-form-field>
+        <app-field-errors [field]="proposalForm.discountPct" />
+      </div>
+    </div>
+
+    <div>
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="agent-glow w-full"
+        [attr.data-agent-filled]="filled().has('startDate') ? '' : null"
+      >
+        <mat-label>Start date</mat-label>
+        <input matInput type="date" data-field="startDate" [formField]="proposalForm.startDate" />
+      </mat-form-field>
+      <app-field-errors [field]="proposalForm.startDate" />
+    </div>
+
+    <fieldset
+      class="agent-glow m-0 flex flex-col gap-2 border-0 p-0"
+      [attr.data-agent-filled]="filled().has('lineItems') ? '' : null"
+    >
+      <legend class="mb-1 p-0 text-sm font-medium text-on-surface-variant">Line items</legend>
+      @for (item of proposalForm.lineItems; track $index) {
+        <div>
+          <div class="flex items-center gap-1">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-full">
+              <mat-label>Line item {{ $index + 1 }}</mat-label>
+              <input matInput data-field="lineItems" [formField]="item" />
+            </mat-form-field>
+            <button
+              mat-icon-button
+              type="button"
+              data-testid="remove-line-item"
+              [attr.aria-label]="'Remove line item ' + ($index + 1)"
+              (click)="removeLineItem($index)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+          <app-field-errors [field]="item" />
+        </div>
+      }
+      <app-field-errors [field]="proposalForm.lineItems" />
+      <div>
+        <button mat-button type="button" data-testid="add-line-item" (click)="addLineItem()">
+          <mat-icon>add</mat-icon>
+          Add line item
+        </button>
+      </div>
+    </fieldset>
+  </div>
+
+  <footer class="flex justify-end gap-2 border-t border-outline-variant px-5 py-3">
+    <button mat-button type="button" (click)="close()">Close</button>
+    <button mat-flat-button type="submit" data-testid="save">Save draft</button>
+  </footer>
+</form>
