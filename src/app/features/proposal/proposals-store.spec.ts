@@ -31,4 +31,13 @@ describe('ProposalsStore', () => {
     expect(store.latest()).toEqual(second);
     expect(store.entities()).toHaveLength(2);
   });
+
+  it('clears every draft and restarts numbering', () => {
+    const store = setup();
+    store.saveDraft(createProposalModel({ dealId: 'D-1001' }));
+    store.clearDrafts();
+    expect(store.entities()).toEqual([]);
+    expect(store.latest()).toBeNull();
+    expect(store.saveDraft(createProposalModel({ dealId: 'D-1001' })).id).toBe('P-0001');
+  });
 });

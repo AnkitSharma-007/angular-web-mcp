@@ -12,6 +12,9 @@ export const LayoutStore = signalStore(
     toggleConsole(): void {
       patchState(store, (state) => ({ consoleOpen: !state.consoleOpen }));
     },
+    openConsole(): void {
+      patchState(store, { consoleOpen: true });
+    },
     toggleInspector(): void {
       patchState(store, (state) => ({ inspectorOpen: !state.inspectorOpen }));
     },

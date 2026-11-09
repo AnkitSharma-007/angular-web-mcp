@@ -20,8 +20,20 @@
   >
     Lab
   </a>
+  <button
+    type="button"
+    class="ml-auto cursor-pointer rounded-full border border-outline-variant bg-transparent px-4 py-1.5 text-sm font-medium text-on-surface"
+    data-testid="toggle-console"
+    [attr.aria-pressed]="layout.consoleOpen()"
+    (click)="layout.toggleConsole()"
+  >
+    Agent console
+  </button>
 </nav>
 <router-outlet />
+@if (layout.consoleOpen()) {
+  <app-agent-console />
+}
 @if (ui.proposalOpen()) {
   <app-proposal-drawer />
 }

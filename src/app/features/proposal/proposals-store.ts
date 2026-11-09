@@ -1,7 +1,6 @@
-import { inject } from '@angular/core';
+import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods } from '@ngrx/signals';
-import { addEntity, withEntities } from '@ngrx/signals/entities';
-import { computed } from '@angular/core';
+import { addEntity, removeAllEntities, withEntities } from '@ngrx/signals/entities';
 import type { ProposalDraft, ProposalModel } from '../../core/models/proposal';
 import { CLOCK } from '../../core/util/clock';
 
@@ -22,6 +21,9 @@ export const ProposalsStore = signalStore(
         };
         patchState(store, addEntity(draft));
         return draft;
+      },
+      clearDrafts(): void {
+        patchState(store, removeAllEntities());
       },
     };
   }),

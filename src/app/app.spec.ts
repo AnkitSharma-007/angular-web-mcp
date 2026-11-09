@@ -4,6 +4,8 @@ import { expectNoA11yViolations } from '../testing/a11y';
 import { App } from './app';
 import { appConfig } from './app.config';
 import { routes } from './app.routes';
+import { PresenterActions } from './features/agent-console/presenter-actions';
+import { LayoutStore } from './features/layout/layout-store';
 import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 describe('App', () => {
@@ -82,5 +84,20 @@ describe('App', () => {
   it('is free of axe violations', async () => {
     const { root } = await render();
     await expectNoA11yViolations(root);
+  });
+
+  it('forwards window key presses to the presenter hotkeys', async () => {
+    await render();
+    const handleKey = vi.spyOn(TestBed.inject(PresenterActions), 'handleKey');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '`', cancelable: true }));
+    expect(handleKey).toHaveBeenCalledOnce();
+    expect(TestBed.inject(LayoutStore).inspectorOpen()).toBe(true);
+  });
+
+  it('opens the console and fills the prompt when a chip hotkey is pressed', async () => {
+    await render();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', cancelable: true }));
+    expect(TestBed.inject(LayoutStore).consoleOpen()).toBe(true);
+    expect(TestBed.inject(PresenterActions).draft()?.text).toContain('pipeline summary');
   });
 });

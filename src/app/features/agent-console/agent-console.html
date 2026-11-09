@@ -1,0 +1,128 @@
+<section
+  aria-labelledby="agent-console-title"
+  class="glass flex flex-col gap-3 rounded-2xl p-4"
+  data-testid="agent-console"
+>
+  <header class="flex flex-wrap items-center gap-2">
+    <mat-icon aria-hidden="true">smart_toy</mat-icon>
+    <h2 id="agent-console-title" class="m-0 text-base font-semibold text-on-surface">
+      Agent console
+    </h2>
+    @if (modelInfo(); as info) {
+      <span
+        class="rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant"
+        data-testid="model-badge"
+        [attr.data-model]="info.id"
+      >
+        {{ info.emoji }} {{ info.persona }} · {{ info.id }}
+      </span>
+    }
+    <span class="flex-1"></span>
+    <span
+      class="text-xs text-on-surface-variant"
+      role="status"
+      data-testid="status"
+      [attr.data-status]="session.status()"
+    >
+      {{ statusLabel() }}
+    </span>
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Clear transcript"
+      data-testid="clear"
+      [disabled]="session.running() || session.transcript().length === 0"
+      (click)="session.clear()"
+    >
+      <mat-icon>delete_sweep</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Close agent console"
+      data-testid="close"
+      (click)="layout.toggleConsole()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  @if (!canRun()) {
+    <p
+      class="m-0 flex flex-wrap items-center gap-3 text-sm text-on-surface-variant"
+      data-testid="key-required"
+    >
+      <span>
+        {{
+          settings.keyStatus() === 'invalid'
+            ? 'Google rejected the saved API key.'
+            : 'The in-app agent needs your own Gemini API key.'
+        }}
+      </span>
+      <button mat-stroked-button type="button" data-testid="add-key" (click)="openKeyDialog()">
+        {{ settings.keyStatus() === 'invalid' ? 'Replace API key' : 'Add API key' }}
+      </button>
+    </p>
+  }
+
+  <div class="flex flex-wrap gap-2" role="group" aria-label="Demo prompts">
+    @for (chip of chips; track chip.id) {
+      <button
+        mat-stroked-button
+        type="button"
+        [attr.data-testid]="'chip-' + chip.id"
+        [disabled]="locked()"
+        (click)="runChip(chip)"
+      >
+        <kbd class="mr-1 rounded border border-outline-variant px-1 text-xs">{{ chip.hotkey }}</kbd>
+        {{ chip.label }}
+      </button>
+    }
+  </div>
+
+  <div
+    #log
+    role="log"
+    aria-label="Agent transcript"
+    tabindex="0"
+    class="flex max-h-96 min-h-32 flex-col gap-2 overflow-y-auto"
+    data-testid="transcript"
+  >
+    @for (item of session.transcript(); track item.id) {
+      <app-transcript-item [entry]="item" (fix)="applyFix($event)" />
+    } @empty {
+      <p class="m-0 text-sm text-on-surface-variant">
+        Pick a demo prompt, or ask about the pipeline.
+      </p>
+    }
+  </div>
+
+  <div class="flex items-end gap-2">
+    <textarea
+      rows="2"
+      class="min-h-12 flex-1 resize-y rounded-xl border border-outline bg-transparent px-3 py-2 text-sm text-on-surface"
+      aria-label="Message the agent"
+      placeholder="Ask the agent. Enter sends, Shift+Enter adds a line."
+      data-testid="prompt"
+      [formField]="promptForm.prompt"
+      (keydown.enter)="submitOnEnter($event)"
+    ></textarea>
+    @if (session.running()) {
+      <button mat-flat-button type="button" data-testid="stop" (click)="session.stop()">
+        <mat-icon>stop_circle</mat-icon>
+        Stop
+      </button>
+    } @else {
+      <button
+        mat-flat-button
+        type="button"
+        data-testid="send"
+        [disabled]="locked()"
+        (click)="send()"
+      >
+        <mat-icon>send</mat-icon>
+        Send
+      </button>
+    }
+  </div>
+</section>

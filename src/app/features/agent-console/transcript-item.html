@@ -1,0 +1,132 @@
+@if (userText(); as text) {
+  <div class="flex justify-end" data-testid="user-message">
+    <p
+      class="m-0 max-w-[90%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-on-primary"
+    >
+      {{ text }}
+    </p>
+  </div>
+} @else if (event(); as ev) {
+  @switch (ev.type) {
+    @case ('thought') {
+      <details
+        class="rounded-xl border border-outline-variant px-3 py-2 text-sm"
+        data-testid="thought"
+      >
+        <summary class="cursor-pointer text-on-surface-variant">
+          <mat-icon class="align-middle" aria-hidden="true">psychology</mat-icon>
+          Thinking
+        </summary>
+        <p class="mb-0 mt-2 whitespace-pre-wrap text-on-surface-variant">{{ ev.text }}</p>
+      </details>
+    }
+    @case ('text-delta') {
+      <p class="m-0 whitespace-pre-wrap text-sm text-on-surface" data-testid="agent-text">
+        {{ ev.text }}
+      </p>
+    }
+    @case ('tool-call') {
+      <div
+        class="rounded-xl border border-outline-variant px-3 py-2 text-sm"
+        data-testid="tool-call"
+      >
+        <div class="flex items-center gap-2">
+          <mat-icon class="text-primary" aria-hidden="true">build</mat-icon>
+          <span class="font-medium text-on-surface">{{ ev.name }}</span>
+          <span class="text-xs text-on-surface-variant">called</span>
+        </div>
+        <details class="mt-1">
+          <summary class="cursor-pointer text-xs text-on-surface-variant">Arguments</summary>
+          <pre class="m-0 mt-1 overflow-x-auto text-xs text-on-surface">{{ ev.args | json }}</pre>
+        </details>
+      </div>
+    }
+    @case ('tool-result') {
+      <div
+        class="rounded-xl border px-3 py-2 text-sm"
+        data-testid="tool-result"
+        [class.border-outline-variant]="ev.ok"
+        [class.border-error]="!ev.ok"
+        [attr.data-ok]="ev.ok"
+      >
+        <div class="flex items-center gap-2">
+          <mat-icon aria-hidden="true" [class.text-success]="ev.ok" [class.text-error]="!ev.ok">
+            {{ ev.ok ? 'check_circle' : 'error' }}
+          </mat-icon>
+          <span class="font-medium text-on-surface">{{ ev.name }}</span>
+          <span class="text-xs text-on-surface-variant">
+            {{ ev.ok ? 'returned' : 'failed' }} in {{ ev.latencyMs | number: '1.0-0' }} ms
+          </span>
+        </div>
+        <details class="mt-1">
+          <summary class="cursor-pointer text-xs text-on-surface-variant">Result</summary>
+          <pre class="m-0 mt-1 max-h-60 overflow-auto text-xs text-on-surface">{{
+            ev.result | json
+          }}</pre>
+        </details>
+      </div>
+    }
+    @case ('tools-changed') {
+      <p
+        class="m-0 flex flex-wrap items-center gap-2 text-xs text-on-surface-variant"
+        data-testid="tools-changed"
+      >
+        <mat-icon aria-hidden="true">sync</mat-icon>
+        <span>Tools changed</span>
+        @for (name of ev.added; track name) {
+          <span class="rounded-full border border-outline-variant px-2 py-0.5">+ {{ name }}</span>
+        }
+        @for (name of ev.removed; track name) {
+          <span class="rounded-full border border-outline-variant px-2 py-0.5">− {{ name }}</span>
+        }
+      </p>
+    }
+    @case ('awaiting-approval') {
+      <p
+        class="m-0 flex items-center gap-2 rounded-xl border border-tertiary px-3 py-2 text-sm text-on-surface"
+        role="status"
+        data-testid="awaiting-approval"
+      >
+        <mat-icon aria-hidden="true">pause_circle</mat-icon>
+        Waiting for your approval: {{ ev.toolName }}
+      </p>
+    }
+    @case ('error') {
+      <div
+        class="rounded-xl border border-error px-3 py-2 text-sm"
+        role="alert"
+        data-testid="error-card"
+        [attr.data-kind]="ev.kind"
+      >
+        <p class="m-0 font-medium text-error">{{ guide(ev.kind).title }}</p>
+        <p class="m-0 mt-1 text-on-surface-variant">{{ guide(ev.kind).hint }}</p>
+        <p class="m-0 mt-1 break-words text-xs text-on-surface-variant" data-testid="error-message">
+          {{ ev.message }}
+        </p>
+        @if (guide(ev.kind).fix; as action) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="mt-2"
+            data-testid="error-fix"
+            (click)="fix.emit(action.action)"
+          >
+            {{ action.label }}
+          </button>
+        }
+      </div>
+    }
+    @case ('done') {
+      <p
+        class="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant"
+        data-testid="done"
+      >
+        <span>{{ emojiOf(ev.model) }} {{ ev.model }}</span>
+        <span>{{ total(ev.usage) | number: '1.0-0' }} tokens</span>
+        <span>{{ ev.usage.thinking | number: '1.0-0' }} thinking</span>
+        <span>{{ ev.costUsd | currency: 'USD' : 'symbol' : '1.4-4' }}</span>
+        <span>{{ ev.ms / 1000 | number: '1.1-1' }} s</span>
+      </p>
+    }
+  }
+}

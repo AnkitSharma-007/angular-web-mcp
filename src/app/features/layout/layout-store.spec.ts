@@ -18,4 +18,11 @@ describe('LayoutStore', () => {
     expect(store.consoleOpen()).toBe(false);
     expect(store.inspectorOpen()).toBe(true);
   });
+
+  it('opens the console without toggling it closed', () => {
+    const store = TestBed.inject(LayoutStore);
+    store.openConsole();
+    store.openConsole();
+    expect(store.consoleOpen()).toBe(true);
+  });
 });

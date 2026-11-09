@@ -7,6 +7,10 @@ import { HUMAN_APPROVAL_GATE } from '../../mcp/tooling/approval-gate';
 import { expectNoA11yViolations } from '../../../testing/a11y';
 import { App } from '../../app';
 import { routes } from '../../app.routes';
+import { PresenterActions } from '../agent-console/presenter-actions';
+import { LayoutStore } from '../layout/layout-store';
+import { ProposalsStore } from '../proposal/proposals-store';
+import { createProposalModel } from '../../core/models/proposal';
 import { DashboardUiStore } from './data/dashboard-ui-store';
 import { DealsStore } from './data/deals-store';
 
@@ -110,5 +114,60 @@ describe('dashboard route tree', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelectorAll('tr[mat-row]')).toHaveLength(24);
     await expectNoA11yViolations(fixture.nativeElement);
+  });
+
+  it('toggles the agent console from the shell', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    const root = harness.fixture.nativeElement as HTMLElement;
+    const toggle = root.querySelector<HTMLButtonElement>('[data-testid="toggle-console"]');
+    expect(root.querySelector('app-agent-console')).toBeNull();
+    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+    toggle?.click();
+    await harness.fixture.whenStable();
+    expect(root.querySelector('app-agent-console')).not.toBeNull();
+    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+    expect(TestBed.inject(LayoutStore).consoleOpen()).toBe(true);
+  });
+
+  it('keeps the console open on the lab page', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    TestBed.inject(LayoutStore).openConsole();
+    await harness.navigateByUrl('/dashboard/lab');
+    expect(
+      (harness.fixture.nativeElement as HTMLElement).querySelector('app-agent-console'),
+    ).not.toBeNull();
+  });
+
+  it('resets the demo state when the presenter resets', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    const injector = harness.routeDebugElement?.injector;
+    const deals = injector?.get(DealsStore);
+    const ui = injector?.get(DashboardUiStore);
+    const proposals = injector?.get(ProposalsStore);
+    deals?.recordSnapshot('before');
+    deals?.applyDiscount(['D-1002'], 25);
+    deals?.setFilter({ regions: ['EMEA'] });
+    proposals?.saveDraft(createProposalModel({ dealId: 'D-1001' }));
+    ui?.openProposal('D-1001');
+    TestBed.inject(PresenterActions).reset();
+    expect(deals?.entityMap()['D-1002']?.discountPct).toBe(0);
+    expect(deals?.filter().regions).toEqual([]);
+    expect(deals?.history()).toEqual([]);
+    expect(proposals?.entities()).toEqual([]);
+    expect(ui?.proposalOpen()).toBe(false);
+  });
+
+  it('stops resetting after leaving the dashboard', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    const deals = harness.routeDebugElement?.injector.get(DealsStore);
+    const reset = vi.spyOn(deals!, 'reset');
+    await harness.navigateByUrl('/about');
+    TestBed.tick();
+    TestBed.inject(PresenterActions).reset();
+    expect(reset).not.toHaveBeenCalled();
   });
 });

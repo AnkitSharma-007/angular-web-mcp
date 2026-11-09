@@ -4,6 +4,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme';
+import { PresenterActions } from './features/agent-console/presenter-actions';
 import { ApiKeyDialogLauncher } from './features/settings/api-key-dialog-launcher';
 import { SettingsStore } from './features/settings/settings-store';
 import { REGISTRY_KIND } from './mcp/registry/registry-kind';
@@ -12,6 +13,7 @@ import { REGISTRY_KIND } from './mcp/registry/registry-kind';
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, MatToolbar, MatIconButton, MatIcon],
   templateUrl: './app.html',
+  host: { '(window:keydown)': 'onKeydown($event)' },
 })
 export class App {
   protected readonly title = 'Angular Web MCP';
@@ -20,6 +22,7 @@ export class App {
   protected readonly settings = inject(SettingsStore);
   private readonly router = inject(Router);
   private readonly keyDialog = inject(ApiKeyDialogLauncher);
+  private readonly presenter = inject(PresenterActions);
 
   protected readonly dashboardActive = isActive('/dashboard', this.router, {
     paths: 'subset',
@@ -32,5 +35,9 @@ export class App {
 
   protected openKeyDialog(): void {
     void this.keyDialog.open();
+  }
+
+  protected onKeydown(event: KeyboardEvent): void {
+    this.presenter.handleKey(event);
   }
 }
