@@ -8,7 +8,9 @@
     "watch": "ng build --watch --configuration development",
     "lint": "ng lint",
     "test": "ng test --watch=false",
-    "test:coverage": "ng test --watch=false --coverage"
+    "test:coverage": "ng test --watch=false --coverage",
+    "icons:subset": "python3 scripts/subset-material-symbols.py",
+    "icons:check": "python3 scripts/subset-material-symbols.py --check"
   },
   "private": true,
   "packageManager": "npm@11.16.0",
