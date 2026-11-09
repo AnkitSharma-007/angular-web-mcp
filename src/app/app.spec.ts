@@ -1,5 +1,6 @@
-import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { expectNoA11yViolations } from '../testing/a11y';
 import { App } from './app';
 import { appConfig } from './app.config';
 import { routes } from './app.routes';
@@ -17,11 +18,15 @@ describe('App', () => {
     document.documentElement.classList.remove('dark');
   });
 
-  it('renders its title', async () => {
+  async function render() {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    const heading = (fixture.nativeElement as HTMLElement).querySelector('h1');
-    expect(heading?.textContent).toContain('Angular Web MCP');
+    return { fixture, root: fixture.nativeElement as HTMLElement };
+  }
+
+  it('renders its title', async () => {
+    const { root } = await render();
+    expect(root.querySelector('h1')?.textContent).toContain('Angular Web MCP');
   });
 
   it('runs zoneless', () => {
@@ -29,9 +34,7 @@ describe('App', () => {
   });
 
   it('hosts the router outlet', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const root = fixture.nativeElement as HTMLElement;
+    const { root } = await render();
     expect(root.querySelector('router-outlet')).not.toBeNull();
   });
 
@@ -39,17 +42,28 @@ describe('App', () => {
     expect(() => fetch('/api')).toThrow('Unexpected network call');
   });
 
+  it('configures providers for the application', () => {
+    expect(appConfig.providers.length).toBeGreaterThan(0);
+  });
+
+  it('renders a glass toolbar with the theme toggle', async () => {
+    const { root } = await render();
+    expect(root.querySelector('mat-toolbar')?.classList.contains('glass')).toBe(true);
+    expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Switch to light theme');
+  });
+
   it('toggles the theme from the toolbar', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const button = (fixture.nativeElement as HTMLElement).querySelector('button');
+    const { fixture, root } = await render();
+    const button = root.querySelector('button');
     button?.click();
     await fixture.whenStable();
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(button?.getAttribute('aria-label')).toBe('Switch to dark theme');
+    expect(localStorage.getItem('awm.theme')).toBe('light');
   });
 
-  it('configures providers for the application', () => {
-    expect(appConfig.providers.length).toBeGreaterThan(0);
+  it('is free of axe violations', async () => {
+    const { root } = await render();
+    await expectNoA11yViolations(root);
   });
 });
