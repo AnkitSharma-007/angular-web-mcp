@@ -190,6 +190,41 @@ describe('SettingsStore', () => {
     });
   });
 
+  describe('canUseAgent', () => {
+    it('is false without a key', () => {
+      const { store } = setup();
+      expect(store.canUseAgent()).toBe(false);
+    });
+
+    it('is true while the key is checked and once it is valid', async () => {
+      const { store } = setup();
+      store.saveKey(KEY, false);
+      expect(store.keyStatus()).toBe('checking');
+      expect(store.canUseAgent()).toBe(true);
+      await settled(store);
+      expect(store.canUseAgent()).toBe(true);
+    });
+
+    it('is false when Google rejects the key', async () => {
+      const fake = new FakeGenAI();
+      fake.listError = new FakeApiError(401, 'API key not valid');
+      const { store } = setup(fake);
+      store.saveKey(KEY, false);
+      await settled(store);
+      expect(store.canUseAgent()).toBe(false);
+    });
+
+    it('stays true when the check itself could not run', async () => {
+      const fake = new FakeGenAI();
+      fake.listError = new FakeApiError(503, 'down');
+      const { store } = setup(fake);
+      store.saveKey(KEY, false);
+      await settled(store);
+      expect(store.keyStatus()).toBe('unreachable');
+      expect(store.canUseAgent()).toBe(true);
+    });
+  });
+
   describe('toVerdict', () => {
     it.each([400, 401, 403])('maps %i to an invalid key', (status) => {
       expect(toVerdict(new FakeApiError(status))).toMatchObject({ ok: false, reason: 'invalid' });
