@@ -489,4 +489,139 @@ describe('deal mutation tools', () => {
       await expect(call('setDealFilter', { reason: 'because' })).rejects.toThrow();
     });
   });
+  describe('terminateContract', () => {
+    const ARGS = { dealId: 'D-1001', reason: 'Customer asked to cancel' };
+
+    it('is critical and always asks the gate, with a diff of the contract', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: true });
+      await call('terminateContract', ARGS);
+
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        toolName: 'terminateContract',
+        risk: 'critical',
+        summary: 'Terminate the contract with Konkan Freight (D-1001)',
+        reason: ARGS.reason,
+        policy: ['Terminating a contract always needs a human decision'],
+        diff: [
+          {
+            label: 'Konkan Freight (D-1001)',
+            field: 'Contract',
+            before: 'active',
+            after: 'terminated',
+            note: '$171k net value',
+          },
+        ],
+      });
+    });
+
+    it('terminates on approval, snapshots, stamps the time and offers Undo', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: true });
+      const output = await call<{ status: string; dealId: string; terminatedAt: string }>(
+        'terminateContract',
+        ARGS,
+      );
+
+      expect(output).toMatchObject({
+        status: 'applied',
+        dealId: 'D-1001',
+        terminatedAt: '2026-11-09T10:00:00.000Z',
+      });
+      expect(store.entityMap()['D-1001']?.contractStatus).toBe('terminated');
+      expect(store.lastEntry()?.label).toBe('Terminate contract D-1001');
+      expect(open.mock.calls[0]?.[0]).toBe('Agent terminated the contract for D-1001');
+
+      actions[0]?.next();
+      expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
+    });
+
+    it('changes nothing and takes no snapshot when the human rejects', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: false, note: 'Not without legal' });
+      const output = await call('terminateContract', ARGS);
+      expect(output).toEqual({ status: 'rejected_by_human', note: 'Not without legal' });
+      expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
+      expect(store.canUndo()).toBe(false);
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it('is rejected outright when no approval gate exists', async () => {
+      setup(false);
+      const output = await call<{ status: string }>('terminateContract', ARGS);
+      expect(output.status).toBe('rejected_by_human');
+      expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
+    });
+
+    it('is gated even when the deal has no active contract, and reports no_change', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: true });
+      const output = await call<MutationOutput & { terminatedAt: string | null }>(
+        'terminateContract',
+        { dealId: 'D-1002', reason: ARGS.reason },
+      );
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(output).toMatchObject({
+        status: 'no_change',
+        terminatedAt: null,
+        skipped: [{ id: 'D-1002', why: 'only closed-won deals have a contract' }],
+      });
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it('fails on an unknown deal without bothering the human', async () => {
+      setup(true);
+      await expect(
+        call('terminateContract', { dealId: 'D-9999', reason: ARGS.reason }),
+      ).rejects.toThrow('Unknown deal D-9999');
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it('validates its input and carries the consequential hint', async () => {
+      setup(true);
+      await expect(call('terminateContract', { dealId: 'D-1001' })).rejects.toThrow('reason');
+      await expect(call('terminateContract', { dealId: 'x', reason: ARGS.reason })).rejects.toThrow(
+        'dealId',
+      );
+      const tool = registry.current.getTools().find(({ name }) => name === 'terminateContract');
+      expect(tool?.annotations?.['consequentialHint']).toBe(true);
+    });
+  });
+
+  describe('approval requests', () => {
+    it('lists each discount change with its revenue impact', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: false });
+      await call('applyBatchDiscount', {
+        dealIds: ['D-1002', 'D-1005'],
+        discountPct: 20,
+        reason: REASON,
+      });
+      const { diff, policy } = request.mock.calls[0]?.[0] ?? {};
+      expect(policy).toEqual(['Discount of 20% is above the 15% policy limit']);
+      expect(diff?.map((row) => [row.label, row.before, row.after, row.note])).toEqual([
+        ['Arcadia Bank (D-1002)', '0%', '20%', '-$84k'],
+        [expect.stringMatching(/\(D-1005\)$/), '0%', '20%', expect.stringMatching(/^-\$/)],
+      ]);
+    });
+
+    it('lists each large deal that would be closed lost with its current stage', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: false });
+      await call('updateDealStages', {
+        updates: [{ dealId: 'D-1002', stage: 'closed-lost' }],
+        reason: REASON,
+      });
+      expect(request.mock.calls[0]?.[0].diff).toEqual([
+        {
+          label: 'Arcadia Bank (D-1002)',
+          field: 'Stage',
+          before: 'Negotiation',
+          after: 'Closed Lost',
+          note: '$420k net value',
+        },
+      ]);
+    });
+  });
 });

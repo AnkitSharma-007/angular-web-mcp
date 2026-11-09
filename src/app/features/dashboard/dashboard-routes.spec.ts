@@ -2,6 +2,8 @@ import { DestroyRef, inject, provideEnvironmentInitializer } from '@angular/core
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, withAutoCleanupInjectors, type Route } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { ApprovalService } from '../approvals/approval-service';
+import { HUMAN_APPROVAL_GATE } from '../../mcp/tooling/approval-gate';
 import { expectNoA11yViolations } from '../../../testing/a11y';
 import { App } from '../../app';
 import { routes } from '../../app.routes';
@@ -68,6 +70,27 @@ describe('dashboard route tree', () => {
     await harness.navigateByUrl('/dashboard');
     const store = harness.routeDebugElement?.injector.get(DealsStore);
     expect(store?.entityMap()['D-1002']?.discountPct).toBe(0);
+  });
+
+  it('provides the approval service as the human approval gate on the dashboard only', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    const gate = harness.routeDebugElement?.injector.get(HUMAN_APPROVAL_GATE);
+    expect(gate).toBe(TestBed.inject(ApprovalService));
+    await harness.navigateByUrl('/about');
+    expect(harness.routeDebugElement?.injector.get(HUMAN_APPROVAL_GATE, null)).toBeNull();
+  });
+
+  it('shows the agent history panel on the dashboard once something is snapshotted', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/dashboard');
+    const root = harness.fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('app-agent-history-panel section')).toBeNull();
+    harness.routeDebugElement?.injector.get(DealsStore).recordSnapshot('10% discount on 3 deals');
+    await harness.fixture.whenStable();
+    expect(root.querySelector('app-agent-history-panel section')?.textContent).toContain(
+      '10% discount on 3 deals',
+    );
   });
 
   it('scopes the UI store to the dashboard route', async () => {
