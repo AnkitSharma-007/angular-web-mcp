@@ -1251,3 +1251,75 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - Commit 4.2 had no new specs of its own (the gate held at about 89 % coverage), and 4.3 added all of them.
 - **Ready for Session 5:**
   - **Telemetry, `withWebMcpTools()` & Batch Tools (Act 2).** It starts with 5.1: `feat(telemetry): add wire telemetry store with JSON-RPC envelopes, stats and key redaction`. Wire `TOOL_TELEMETRY` to the new store there.
+
+## Handoff Note: Session 5 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/mcp/telemetry/wire-packet.ts`:
+    - Types: `WirePacket`, `WireChannel`, `WireMethod`, `WireStatus`, `TokenUsage`, `WireEnvelope {request, response?}`, `JsonRpcRequest`, `JsonRpcResponse`. `envelope` is typed as `WireEnvelope`, not `unknown`.
+    - `redactSecrets(value, secrets?)`: a deep copy that masks the `x-goog-api-key` header (any casing), `key=<value>` anywhere in a string, and each raw secret of at least 8 characters.
+    - Also exports `REDACTED` (`•••`), `MIN_SECRET_LENGTH` and `byteLength(value)` (UTF-8 bytes of the JSON).
+  - `src/app/mcp/telemetry/wire-telemetry-store.ts`: `WireTelemetryStore` (`providedIn: 'root'`, `withEntities<WirePacket>`).
+    - State: `paused`.
+    - Computed:
+      - `stats`: `{total, pending, calls, errors, rejected, errorRate, p50, p95, totalBytes}`. Latency and error rate cover only **settled `mcp` `tools/call`** packets, and `rejected` counts as settled but not as an error.
+      - `byModel`: `ModelStats[]` (`{model, calls, tokens, costUsd, avgLatencyMs}`) for settled `llm` packets that have a model, sorted by model name.
+    - Methods:
+      - `begin(start: PacketStart): number` returns the packet id, or `0` when paused.
+      - `end(id, outcome: PacketOutcome)` is a no-op for an unknown or already settled id. If `latencyMs` is omitted it is `clock() - at`.
+      - `record(start, outcome): number`
+      - `pause()`, `resume()`, `clear()` (ids keep increasing)
+      - `exportJson()`
+    - Also exports `WIRE_SECRETS`, `MAX_PACKETS` (500), `percentile` (nearest-rank), `INTERNAL_ERROR_CODE` (-32603), and the types `PacketStart`, `PacketOutcome`, `WireStats` and `ModelStats`.
+    - The request carries `id` equal to the packet id, except `notifications/*`, which have none. An `error` outcome becomes a JSON-RPC `error` object, and any other outcome becomes `result` (null if absent).
+  - `src/app/mcp/telemetry/wire-telemetry-store.ts` `WIRE_SECRETS`: `InjectionToken<() => readonly string[]>` with a default of `() => []`. **Session 8's `SettingsStore` should provide the live key here**, for example `{ provide: WIRE_SECRETS, useFactory: () => { const s = inject(SettingsStore); return () => [s.apiKey()]; } }`.
+  - `src/app/mcp/tooling/with-telemetry.ts`:
+    - `TOOL_TELEMETRY` is now `providedIn: 'root'` and its default factory is `createStoreTelemetry(inject(WireTelemetryStore))`, so **no extra provider is needed**.
+    - `createStoreTelemetry(store)` opens a `mcp` `tools/call` packet with `params: {name, arguments}`.
+    - `ToolSpanResult` gained `result?: unknown`.
+  - `src/app/mcp/tooling/define-tool.ts`: it now passes `{result}` (the raw value, not the MCP wrapper) to `span.end` on ok and on rejection (`{status: 'rejected_by_human', note?}`), and `{error}` on failure.
+  - `src/app/mcp/store-features/with-webmcp-tools.ts`: `withWebMcpTools(tools: () => readonly WebMcpToolDescriptor[])`.
+    - It registers each tool in `onInit` through `declareExperimentalWebMcpTool(tool, inject(Injector))`.
+    - The tools unregister when the store's injector is destroyed.
+    - A rejected registration goes to `ErrorHandler.handleError`.
+  - `src/app/features/dashboard/tools/risk-policy.ts`:
+    - Constants: `DISCOUNT_APPROVAL_PCT` (15), `IMPACT_APPROVAL_USD` (250_000), `CLOSED_LOST_APPROVAL_USD` (100_000).
+    - Functions: `discountImpact(listValue, before, after)`, `assessDiscount(deals, pct): {changes, revenueImpact, flags}` and `assessStageMoves(entityMap, moves): {flaggedDeals, flags}`.
+    - Rules (all strict `>`):
+      - the discount is above 15 %
+      - the revenue **loss** is above $250k (a reduction in discount never counts)
+      - an **open** deal with net value above $100k moves to closed-lost
+  - `src/app/features/dashboard/tools/deal-mutation-tools.ts`: `dealMutationTools(store: DealMutationStore): WebMcpToolDescriptor[]` returns `setDealFilter`, `applyBatchDiscount` and `updateDealStages`.
+    - `DealMutationStore` is a structural interface, which avoids an import cycle with `DealsStore`.
+    - **Session 6 adds `terminateContract` here** and needs `terminateContract` on that interface.
+    - Output shapes:
+      - `setDealFilter` returns `{applied: DealFilter (the resulting filter), visibleCount}`.
+      - `applyBatchDiscount` returns `{status, changed[{id,before,after}], skipped[{id,why}], revenueImpact}`. `revenueImpact` is negative for a loss.
+      - `updateDealStages` returns `{status, moved[{id,before,after}], skipped[{id,why}]}`.
+      - `status` is `applied` (nothing skipped), `partial`, or `no_change`.
+  - `src/app/features/history/undo-notifier.ts`: `UndoNotifier` (`@Service()`) with `announce(message, onUndo?)` and `UNDO_NOTICE_MS` (8000).
+    - It uses `MatSnackBar`, and the action is `Dismiss`, or `Undo` when `onUndo` is given.
+    - **Session 6 should pass `() => store.undo()` from the tools**, and `run` already has the notifier as its `deps`.
+  - `src/app/features/dashboard/data/deals-store.ts`: `DealsStore = signalStore(withDeals(), withAgentHistory({capacity: 20}), withHooks({onInit: reset}), withFeature((store) => withWebMcpTools(() => dealMutationTools(store))))`. The dashboard route now exposes **6 tools**: 3 read tools plus `setDealFilter`, `applyBatchDiscount` and `updateDealStages`.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (336 tests; statements 98.6 %, branches 98.2 %, functions 96.7 %, lines 98.5 %) and `npm run build` all pass on each of the 3 commits.
+  - **Not verified in a real browser:** the 5.2 acceptance ("Chrome inspector lists 6 tools") was not run. The route spec `context-tools-registration.spec.ts` asserts the 6 names against the fake registry. Run `npm start` with `chrome://flags/#enable-webmcp-testing` when convenient.
+  - **No trailers**, as before (the user's memory rule and §8.0 override the harness attribution reminder). Verified with `git log -1 --format='%an <%ae>%n%(trailers)'`.
+  - **Duplicate registration does not throw.** `declareExperimentalWebMcpTool` is `async`, so a duplicate surfaces as a rejected promise. `withWebMcpTools` routes it to `ErrorHandler.handleError`, and the spec asserts that and that the first registration survives.
+  - **Seed gotcha for tests and the demo script:** `D-1006` (Iberia Telecom) already has a 10 % discount. Setting 10 % on the four EMEA negotiation deals changes only `D-1004` (5→10), `D-1005` and `D-1007`; `D-1006` is skipped as `already at 10%`, and the status is `partial` with `revenueImpact` -$77k. Session 2's note says "about $140k" for a 10 % discount on all four. That is the list-value arithmetic and ignores the existing discounts. Act 2's expected output should account for this.
+  - **A snapshot is recorded after approval and before `run`**, even if `run` then changes nothing (for example all deals already at that discount). The history can therefore contain a no-op entry, and a rejected call never records one. If this is annoying in Session 6's history panel, skip the snapshot when no deal would change.
+  - **Testing tools:**
+    - Provide `DealsStore` in `TestBed` with `useFakeModelContext()`, and call `registry.current.executeTool(name, args)`. The store registers its own tools on creation.
+    - Provide `{ provide: MatSnackBar, useValue: { open } }` to assert the snackbar text.
+    - For the gate, provide `{ provide: HUMAN_APPROVAL_GATE, useValue: { pending: signal(null), request } }`. With no provider, risky calls come back as `rejected_by_human`.
+    - A store that is not `providedIn: 'root'` must be listed in `providers`, otherwise `TestBed.inject` throws NG0201.
+    - To test destruction, use `createEnvironmentInjector([Store], TestBed.inject(EnvironmentInjector))` and call `.destroy()` on it.
+  - **Existing specs changed:** `context-tools-registration.spec.ts` now expects 6 names and `NAMES.length` `toolchange` events per mount. `deal-context-tools.spec.ts` filters the registry down to the three read tools, because it now shares the registry with the store's mutation tools.
+  - **Telemetry shape for the inspector (Session 10):** the response lives in `packet.envelope.response`. A tool packet has no model or tokens. `hitl/*` packets, when Session 6 records them, should use channel `hitl` so they stay out of `stats`.
+  - **No double counting yet:** tool-side spans already record `tools/call` for every caller, including the in-app agent. In Session 8, `McpToolGateway` should record only `tools/list` and `notifications/tools/list_changed` itself, or correlate its own packet with the tool-side one, so that `stats.calls` isn't doubled.
+  - **Blueprint deviations (non-functional):**
+    - The "with-telemetry error path that rethrows" scenario is tested through `defineTool`, because the span logic stays inline in `define-tool.ts` and `with-telemetry.ts` holds the token and the store adapter.
+    - Added `risk-policy.spec.ts`, `wire-packet.spec.ts` and `undo-notifier.spec.ts`.
+    - Commits 5.1 and 5.2 each had a green gate. 5.2 added no specs of its own beyond updating the two registration specs, and 5.3 added all the new scenarios.
+- **Ready for Session 6:**
+  - **Human-in-the-Loop & Undo (Act 4).** It starts with 6.1 in the Session 6 block of this file. `HUMAN_APPROVAL_GATE` is still unprovided, so every risky call is rejected until `ApprovalService` is added and provided in the `dashboard` route.
