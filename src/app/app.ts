@@ -2,15 +2,25 @@ import { Component, inject } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
-import { RouterOutlet } from '@angular/router';
+import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, MatToolbar, MatIconButton, MatIcon],
+  imports: [RouterOutlet, RouterLink, MatToolbar, MatIconButton, MatIcon],
   templateUrl: './app.html',
 })
 export class App {
   protected readonly title = 'Angular Web MCP';
   protected readonly theme = inject(ThemeService);
+  private readonly router = inject(Router);
+
+  protected readonly dashboardActive = isActive('/dashboard', this.router, {
+    paths: 'subset',
+    queryParams: 'ignored',
+  });
+  protected readonly aboutActive = isActive('/about', this.router, {
+    paths: 'exact',
+    queryParams: 'ignored',
+  });
 }

@@ -1,0 +1,23 @@
+<nav aria-label="Dashboard sections" class="flex gap-2">
+  <a
+    routerLink="/dashboard"
+    class="rounded-full px-4 py-1.5 text-sm font-medium no-underline"
+    [class.bg-primary]="overviewActive()"
+    [class.text-on-surface-variant]="!overviewActive()"
+    [class.text-on-primary]="overviewActive()"
+    [attr.aria-current]="overviewActive() ? 'page' : null"
+  >
+    Overview
+  </a>
+  <a
+    routerLink="/dashboard/lab"
+    class="rounded-full px-4 py-1.5 text-sm font-medium no-underline"
+    [class.bg-primary]="labActive()"
+    [class.text-on-surface-variant]="!labActive()"
+    [class.text-on-primary]="labActive()"
+    [attr.aria-current]="labActive() ? 'page' : null"
+  >
+    Lab
+  </a>
+</nav>
+<router-outlet />

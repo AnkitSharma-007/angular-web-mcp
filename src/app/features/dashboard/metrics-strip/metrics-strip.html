@@ -1,0 +1,26 @@
+@let kpis = store.kpis();
+<section aria-label="Key metrics" aria-live="polite" class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+  <app-stat-tile
+    label="Open pipeline"
+    [value]="kpis.openValue | compactCurrency"
+    [hint]="kpis.openDeals + ' open deals'"
+  />
+  <app-stat-tile
+    label="Weighted forecast"
+    [value]="kpis.weightedForecast | compactCurrency"
+    hint="Probability-adjusted"
+  />
+  <app-stat-tile
+    label="Closed won"
+    accent="success"
+    [value]="kpis.wonValue | compactCurrency"
+    hint="Net of discounts"
+  />
+  <app-stat-tile label="Win rate" [value]="kpis.winRate + '%'" hint="Won of all closed" />
+  <app-stat-tile
+    label="Stalled deals"
+    accent="warn"
+    [value]="'' + kpis.stalledCount"
+    hint="No activity for 21+ days"
+  />
+</section>

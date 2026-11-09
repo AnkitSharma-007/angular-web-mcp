@@ -1,6 +1,26 @@
 <header class="sticky top-0 z-10">
   <mat-toolbar class="glass [--mat-toolbar-container-background-color:transparent]">
     <h1 class="m-0 text-xl font-semibold tracking-tight">{{ title }}</h1>
+    <nav aria-label="Primary" class="ml-6 flex gap-1">
+      <a
+        routerLink="/dashboard"
+        class="rounded-full px-3 py-1 text-sm font-medium no-underline"
+        [class.text-primary]="dashboardActive()"
+        [class.text-on-surface-variant]="!dashboardActive()"
+        [attr.aria-current]="dashboardActive() ? 'page' : null"
+      >
+        Dashboard
+      </a>
+      <a
+        routerLink="/about"
+        class="rounded-full px-3 py-1 text-sm font-medium no-underline"
+        [class.text-primary]="aboutActive()"
+        [class.text-on-surface-variant]="!aboutActive()"
+        [attr.aria-current]="aboutActive() ? 'page' : null"
+      >
+        About
+      </a>
+    </nav>
     <span class="flex-1"></span>
     <button
       mat-icon-button

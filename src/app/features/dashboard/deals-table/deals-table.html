@@ -1,0 +1,123 @@
+<section aria-label="Deals" class="glass rounded-2xl p-4">
+  <div class="mb-3 flex flex-wrap items-center gap-3">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-72">
+      <mat-label>Search deals</mat-label>
+      <mat-icon matPrefix>search</mat-icon>
+      <input matInput type="search" [formField]="searchForm.query" />
+    </mat-form-field>
+
+    <mat-chip-set aria-label="Active filters">
+      @for (chip of chips(); track chip.key) {
+        <mat-chip (removed)="chip.remove()">
+          {{ chip.label }}
+          <button
+            matChipRemove
+            type="button"
+            [attr.aria-label]="'Remove ' + chip.label + ' filter'"
+          >
+            <mat-icon>cancel</mat-icon>
+          </button>
+        </mat-chip>
+      }
+    </mat-chip-set>
+
+    @if (chips().length > 0 || searchModel().query) {
+      <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
+    }
+
+    <span class="ml-auto text-sm text-on-surface-variant" aria-live="polite">
+      Showing {{ rows().length }} of {{ store.entities().length }} deals
+    </span>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table
+      mat-table
+      matSort
+      aria-label="Deals"
+      class="w-full [--mat-table-background-color:transparent]"
+      [dataSource]="rows()"
+      [trackBy]="trackById"
+      (matSortChange)="sort.set($event)"
+    >
+      <ng-container matColumnDef="account">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Account</th>
+        <td mat-cell *matCellDef="let deal">
+          <div class="font-medium text-on-surface">{{ deal.account }}</div>
+          <div class="text-xs text-on-surface-variant">{{ deal.id }} · {{ deal.title }}</div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="owner">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Owner</th>
+        <td mat-cell *matCellDef="let deal">{{ deal.owner }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="region">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Region</th>
+        <td mat-cell *matCellDef="let deal">{{ deal.region }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="stage">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Stage</th>
+        <td mat-cell *matCellDef="let deal"><app-stage-badge [stage]="deal.stage" /></td>
+      </ng-container>
+
+      <ng-container matColumnDef="netValue">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header="netValue" arrowPosition="before">
+          Net value
+        </th>
+        <td mat-cell *matCellDef="let deal" class="tabular-nums">
+          {{ netValue(deal) | compactCurrency }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="discountPct">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before">Discount</th>
+        <td mat-cell *matCellDef="let deal" class="tabular-nums">{{ deal.discountPct }}%</td>
+      </ng-container>
+
+      <ng-container matColumnDef="probability">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before">Prob.</th>
+        <td mat-cell *matCellDef="let deal" class="tabular-nums">{{ deal.probability }}%</td>
+      </ng-container>
+
+      <ng-container matColumnDef="closeDate">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Close date</th>
+        <td mat-cell *matCellDef="let deal" class="tabular-nums">{{ deal.closeDate }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="lastActivityDays">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before">Activity</th>
+        <td
+          mat-cell
+          *matCellDef="let deal"
+          class="tabular-nums"
+          [class.text-error]="isStalled(deal)"
+        >
+          {{ deal.lastActivityDays }}d ago
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
+      <tr
+        mat-row
+        *matRowDef="let deal; columns: columns"
+        tabindex="0"
+        class="cursor-pointer"
+        [class.row-flash]="flashing().has(deal.id)"
+        [class.row-selected]="ui.selectedDealId() === deal.id"
+        [attr.aria-current]="ui.selectedDealId() === deal.id ? 'true' : null"
+        [attr.data-deal-id]="deal.id"
+        (click)="ui.selectDeal(deal.id)"
+        (keydown.enter)="ui.selectDeal(deal.id)"
+      ></tr>
+
+      <tr *matNoDataRow>
+        <td class="p-6 text-center text-on-surface-variant" [attr.colspan]="columns.length">
+          No deals match the current filters.
+        </td>
+      </tr>
+    </table>
+  </div>
+</section>
