@@ -1,0 +1,16 @@
+@if (!settings.hasKey()) {
+  <section
+    aria-label="Bring your own key"
+    class="glass flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3"
+    data-testid="byok-banner"
+  >
+    <mat-icon aria-hidden="true">key</mat-icon>
+    <p class="m-0 flex-1 text-sm text-on-surface">
+      External WebMCP agents, such as Chrome's, work with this app without a key. Add your own
+      Gemini API key only to use the in-app agent.
+    </p>
+    <button mat-stroked-button type="button" data-testid="add-key" (click)="openDialog()">
+      Add API key
+    </button>
+  </section>
+}

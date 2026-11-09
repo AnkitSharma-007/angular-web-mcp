@@ -4,6 +4,8 @@ import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme';
+import { ApiKeyDialogLauncher } from './features/settings/api-key-dialog-launcher';
+import { SettingsStore } from './features/settings/settings-store';
 import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 @Component({
@@ -15,7 +17,9 @@ export class App {
   protected readonly title = 'Angular Web MCP';
   protected readonly theme = inject(ThemeService);
   protected readonly registryKind = inject(REGISTRY_KIND);
+  protected readonly settings = inject(SettingsStore);
   private readonly router = inject(Router);
+  private readonly keyDialog = inject(ApiKeyDialogLauncher);
 
   protected readonly dashboardActive = isActive('/dashboard', this.router, {
     paths: 'subset',
@@ -25,4 +29,8 @@ export class App {
     paths: 'exact',
     queryParams: 'ignored',
   });
+
+  protected openKeyDialog(): void {
+    void this.keyDialog.open();
+  }
 }

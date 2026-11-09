@@ -50,12 +50,14 @@ describe('App', () => {
   it('renders a glass toolbar with the theme toggle', async () => {
     const { root } = await render();
     expect(root.querySelector('mat-toolbar')?.classList.contains('glass')).toBe(true);
-    expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Switch to light theme');
+    expect(root.querySelector('button[aria-label^="Switch to"]')?.getAttribute('aria-label')).toBe(
+      'Switch to light theme',
+    );
   });
 
   it('toggles the theme from the toolbar', async () => {
     const { fixture, root } = await render();
-    const button = root.querySelector('button');
+    const button = root.querySelector<HTMLButtonElement>('button[aria-label^="Switch to"]');
     button?.click();
     await fixture.whenStable();
     expect(document.documentElement.classList.contains('dark')).toBe(false);
@@ -69,6 +71,12 @@ describe('App', () => {
     const chip = root.querySelector('[data-testid="registry-chip"]');
     expect(chip?.textContent?.trim()).toBe('WebMCP: polyfill');
     expect(chip?.getAttribute('data-kind')).toBe('polyfill');
+  });
+
+  it('offers the key dialog from the toolbar', async () => {
+    const { root } = await render();
+    const button = root.querySelector('[data-testid="open-key-dialog"]');
+    expect(button?.getAttribute('aria-label')).toBe('Add Gemini API key');
   });
 
   it('is free of axe violations', async () => {

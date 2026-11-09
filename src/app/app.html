@@ -33,6 +33,15 @@
     <button
       mat-icon-button
       type="button"
+      data-testid="open-key-dialog"
+      [attr.aria-label]="settings.hasKey() ? 'Gemini API key and model' : 'Add Gemini API key'"
+      (click)="openKeyDialog()"
+    >
+      <mat-icon>{{ settings.hasKey() ? 'key' : 'key_off' }}</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      type="button"
       [attr.aria-label]="theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme'"
       (click)="theme.toggle()"
     >

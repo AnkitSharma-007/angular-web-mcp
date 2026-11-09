@@ -1,0 +1,73 @@
+<h2 mat-dialog-title class="flex items-center gap-2">
+  <mat-icon aria-hidden="true">key</mat-icon>
+  <span>Gemini API key and model</span>
+</h2>
+
+<form [formRoot]="entryForm">
+  <mat-dialog-content class="flex flex-col gap-4">
+    <p class="m-0 text-sm text-on-surface-variant">
+      The in-app agent calls Gemini straight from your browser with your own key. External WebMCP
+      agents need no key.
+      <a [href]="keyUrl" target="_blank" rel="noopener noreferrer" class="text-primary">
+        Get a key from Google AI Studio
+      </a>
+    </p>
+
+    <div>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-full">
+        <mat-label>API key</mat-label>
+        <input
+          matInput
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          data-testid="api-key"
+          [formField]="entryForm.apiKey"
+        />
+      </mat-form-field>
+      <app-field-errors [field]="entryForm.apiKey" />
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-on-surface">
+      <input type="checkbox" data-testid="remember" [formField]="entryForm.remember" />
+      Remember on this device
+    </label>
+    <p class="m-0 -mt-3 text-xs text-on-surface-variant">
+      Off by default: the key then lives in this tab's session only.
+    </p>
+
+    @if (settings.hasKey()) {
+      <p class="m-0 text-sm text-on-surface-variant" role="status" data-testid="key-status">
+        Saved key:
+        @switch (settings.keyStatus()) {
+          @case ('checking') {
+            checking…
+          }
+          @case ('valid') {
+            valid
+          }
+          @case ('invalid') {
+            rejected by Google
+          }
+          @default {
+            could not reach Google
+          }
+        }
+      </p>
+    }
+
+    <app-model-picker [(value)]="selectedModel" />
+    <p class="m-0 text-xs text-on-surface-variant">
+      A Gemini app subscription does not fund API calls. Argon needs billing on your AI Studio
+      project.
+    </p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    @if (settings.hasKey()) {
+      <button mat-button type="button" data-testid="forget" (click)="forget()">Forget key</button>
+    }
+    <button mat-button type="button" data-testid="cancel" [mat-dialog-close]="false">Cancel</button>
+    <button mat-flat-button type="submit" data-testid="save">Save</button>
+  </mat-dialog-actions>
+</form>
