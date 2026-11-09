@@ -45,7 +45,8 @@ describe('deal context tools', () => {
   }
 
   it('registers three read-only tools with the expected hints', () => {
-    const tools = registry.current.getTools();
+    const contextNames = DEAL_CONTEXT_TOOLS.map((t) => t.name);
+    const tools = registry.current.getTools().filter((t) => contextNames.includes(t.name));
     expect(tools.map((t) => t.name)).toEqual([
       'getDealDetails',
       'getPipelineSummary',

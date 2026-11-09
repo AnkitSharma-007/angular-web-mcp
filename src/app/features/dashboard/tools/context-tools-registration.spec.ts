@@ -4,9 +4,16 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { routes } from '../../../app.routes';
 import { useFakeModelContext } from '../../../../testing/test-providers';
 
-const NAMES = ['getDealDetails', 'getPipelineSummary', 'searchDeals'];
+const NAMES = [
+  'applyBatchDiscount',
+  'getDealDetails',
+  'getPipelineSummary',
+  'searchDeals',
+  'setDealFilter',
+  'updateDealStages',
+];
 
-describe('context tools route-scoped registration', () => {
+describe('dashboard tools route-scoped registration', () => {
   const registry = useFakeModelContext();
 
   beforeEach(() => {
@@ -20,7 +27,7 @@ describe('context tools route-scoped registration', () => {
     document.documentElement.classList.remove('dark');
   });
 
-  it('exposes the three read-only tools on /dashboard and none on /about', async () => {
+  it('exposes the six dashboard tools on /dashboard and none on /about', async () => {
     const harness = await RouterTestingHarness.create();
     expect(registry.current.toolNames()).toEqual([]);
 
@@ -48,10 +55,10 @@ describe('context tools route-scoped registration', () => {
     registry.current.addEventListener('toolchange', listener);
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/dashboard');
-    expect(listener).toHaveBeenCalledTimes(3);
+    expect(listener).toHaveBeenCalledTimes(NAMES.length);
     await harness.navigateByUrl('/about');
     TestBed.tick();
-    expect(listener).toHaveBeenCalledTimes(6);
+    expect(listener).toHaveBeenCalledTimes(NAMES.length * 2);
   });
 
   it('executes through the registry against the route store', async () => {
