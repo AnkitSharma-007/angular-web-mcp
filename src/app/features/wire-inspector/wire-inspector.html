@@ -1,0 +1,250 @@
+<section
+  aria-labelledby="wire-inspector-title"
+  class="glass fixed inset-x-0 bottom-0 z-20 flex h-[45vh] flex-col gap-2 rounded-t-2xl p-4"
+  data-testid="wire-inspector"
+>
+  <header class="flex flex-wrap items-center gap-2">
+    <mat-icon aria-hidden="true">cable</mat-icon>
+    <h2 id="wire-inspector-title" class="m-0 text-base font-semibold text-on-surface">
+      Wire inspector
+    </h2>
+    @if (layout.inspectorRunId(); as runId) {
+      <button
+        mat-stroked-button
+        type="button"
+        data-testid="run-filter"
+        [attr.aria-label]="'Showing packets for ' + runId + '. Show all packets'"
+        (click)="layout.showRun(null)"
+      >
+        Run {{ runId }}
+        <mat-icon iconPositionEnd>close</mat-icon>
+      </button>
+    }
+    @if (telemetry.paused()) {
+      <span
+        class="rounded-full border border-error px-2 py-0.5 text-xs text-error"
+        role="status"
+        data-testid="paused-badge"
+      >
+        Paused
+      </span>
+    }
+    <span class="flex-1"></span>
+    <span class="text-xs text-on-surface-variant" role="status" data-testid="copy-status">
+      @switch (copyStatus()) {
+        @case ('copied') {
+          Copied to clipboard
+        }
+        @case ('failed') {
+          Copy failed
+        }
+      }
+    </span>
+    <button
+      mat-button
+      type="button"
+      data-testid="pause"
+      [attr.aria-pressed]="telemetry.paused()"
+      (click)="togglePause()"
+    >
+      <mat-icon>{{ telemetry.paused() ? 'play_arrow' : 'pause' }}</mat-icon>
+      {{ telemetry.paused() ? 'Resume' : 'Pause' }}
+    </button>
+    <button mat-button type="button" data-testid="clear" (click)="clear()">
+      <mat-icon>delete_sweep</mat-icon>
+      Clear
+    </button>
+    <button mat-button type="button" data-testid="copy" (click)="copy()">
+      <mat-icon>content_copy</mat-icon>
+      Copy JSON
+    </button>
+    <button
+      mat-icon-button
+      type="button"
+      aria-label="Close wire inspector"
+      data-testid="close"
+      (click)="close()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <mat-tab-group class="min-h-0 flex-1" animationDuration="0ms" aria-label="Inspector views">
+    <mat-tab label="Packets">
+      <div class="grid gap-3 pt-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div class="flex max-h-[calc(45vh-9rem)] flex-col gap-1 overflow-y-auto">
+          @if (rows().length === 0) {
+            <p class="m-0 text-sm text-on-surface-variant" data-testid="packets-empty">
+              No packets yet. Run a prompt, or call a tool from another agent.
+            </p>
+          } @else {
+            <ul
+              ngListbox
+              aria-label="Wire packets"
+              selectionMode="follow"
+              class="m-0 flex list-none flex-col gap-1 p-0"
+              [value]="selection()"
+              (valueChange)="select($event)"
+            >
+              @for (row of rows(); track row.id) {
+                <li
+                  ngOption
+                  class="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-xs aria-selected:border-primary aria-selected:bg-[color-mix(in_srgb,var(--mat-sys-primary)_14%,transparent)]"
+                  [class]="row.statusStyle"
+                  [value]="row.id"
+                  [label]="row.title"
+                  [attr.data-testid]="'packet-' + row.id"
+                  [attr.data-channel]="row.channel"
+                  [attr.data-status]="row.status"
+                >
+                  <span
+                    class="w-12 shrink-0 rounded-full border px-1.5 text-center"
+                    [class]="row.channelStyle"
+                  >
+                    {{ row.channelLabel }}
+                  </span>
+                  <span class="min-w-0 flex-1 truncate font-mono">{{ row.title }}</span>
+                  <span class="shrink-0 tabular-nums" data-testid="row-status">{{
+                    row.statusLabel
+                  }}</span>
+                  <span class="w-16 shrink-0 text-right tabular-nums" data-testid="row-latency">{{
+                    row.latency
+                  }}</span>
+                  @if (row.tokens; as tokens) {
+                    <span class="hidden shrink-0 tabular-nums lg:inline" data-testid="row-tokens">{{
+                      tokens
+                    }}</span>
+                  }
+                  @if (row.cost; as cost) {
+                    <span class="shrink-0 tabular-nums" data-testid="row-cost">{{ cost }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+        <div class="max-h-[calc(45vh-9rem)] overflow-y-auto">
+          @if (selected(); as packet) {
+            <app-packet-detail [packet]="packet" />
+          } @else {
+            <p class="m-0 text-sm text-on-surface-variant" data-testid="detail-empty">
+              Select a packet to see its JSON-RPC envelope.
+            </p>
+          }
+        </div>
+      </div>
+    </mat-tab>
+
+    <mat-tab label="Tools">
+      <div class="flex max-h-[calc(45vh-9rem)] flex-col gap-2 overflow-y-auto pt-3">
+        <p class="m-0 text-sm text-on-surface-variant" role="status" data-testid="tools-count">
+          {{ tools().length }} {{ tools().length === 1 ? 'tool' : 'tools' }} registered in
+          document.modelContext
+        </p>
+        <ul class="m-0 flex list-none flex-col gap-2 p-0" aria-label="Registered tools">
+          @for (tool of tools(); track tool.name) {
+            <li
+              class="rounded-xl border border-outline-variant p-3"
+              [class.glow]="tool.isNew"
+              [class.border-primary]="tool.isNew"
+              [attr.data-testid]="'tool-' + tool.name"
+              [attr.data-new]="tool.isNew"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-sm font-medium text-on-surface">{{ tool.name }}</span>
+                @if (tool.isNew) {
+                  <span
+                    class="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary"
+                    data-testid="new-badge"
+                  >
+                    New
+                  </span>
+                }
+                @for (hint of tool.hints; track hint) {
+                  <span
+                    class="rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant"
+                    data-testid="hint"
+                  >
+                    {{ hint }}
+                  </span>
+                }
+              </div>
+              <p class="mt-1 mb-0 text-xs text-on-surface-variant">{{ tool.description }}</p>
+              @if (tool.inputSchema; as schema) {
+                <details class="mt-2">
+                  <summary class="cursor-pointer text-xs text-on-surface-variant">
+                    Input schema
+                  </summary>
+                  <app-json-view [value]="schema" [initialDepth]="3" />
+                </details>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    </mat-tab>
+
+    <mat-tab label="Stats">
+      <div class="flex max-h-[calc(45vh-9rem)] flex-col gap-3 overflow-y-auto pt-3">
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="stats">
+          <app-stat-tile label="Packets" [value]="'' + stats().total" />
+          <app-stat-tile label="Tool calls" [value]="'' + stats().calls" />
+          <app-stat-tile
+            label="Errors"
+            [value]="errorRate()"
+            [hint]="stats().errors + ' failed · ' + stats().rejected + ' rejected'"
+            accent="warn"
+          />
+          <app-stat-tile label="Tool latency p50" [value]="'' + stats().p50 + ' ms'" />
+          <app-stat-tile label="Tool latency p95" [value]="'' + stats().p95 + ' ms'" />
+          <app-stat-tile
+            label="Human wait"
+            [value]="(wait().totalMs / 1000 | number: '1.1-1') + ' s'"
+            [hint]="wait().count + ' decisions'"
+            accent="success"
+          />
+          <app-stat-tile label="Wire size" [value]="(stats().totalBytes | number) + ' B'" />
+        </div>
+        @if (byModel().length === 0) {
+          <p class="m-0 text-sm text-on-surface-variant" data-testid="models-empty">
+            No model calls yet.
+          </p>
+        } @else {
+          <table class="w-full border-collapse text-left text-xs" data-testid="by-model">
+            <caption class="pb-1 text-left text-sm font-medium text-on-surface">
+              By model
+            </caption>
+            <thead class="text-on-surface-variant">
+              <tr>
+                <th scope="col" class="py-1 pr-3 font-medium">Model</th>
+                <th scope="col" class="py-1 pr-3 text-right font-medium">Calls</th>
+                <th scope="col" class="py-1 pr-3 text-right font-medium">In</th>
+                <th scope="col" class="py-1 pr-3 text-right font-medium">Out</th>
+                <th scope="col" class="py-1 pr-3 text-right font-medium">Thinking</th>
+                <th scope="col" class="py-1 pr-3 text-right font-medium">Avg latency</th>
+                <th scope="col" class="py-1 text-right font-medium">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of byModel(); track entry.model) {
+                <tr [attr.data-testid]="'model-row-' + entry.model">
+                  <th scope="row" class="py-1 pr-3 font-mono font-normal">{{ entry.model }}</th>
+                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.calls }}</td>
+                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.input }}</td>
+                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.output }}</td>
+                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.thinking }}</td>
+                  <td class="py-1 pr-3 text-right tabular-nums">
+                    {{ entry.avgLatencyMs | number: '1.0-0' }} ms
+                  </td>
+                  <td class="py-1 text-right tabular-nums" data-testid="model-cost">
+                    {{ entry.costUsd | number: '1.4-4' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</section>

@@ -31,6 +31,18 @@
       WebMCP: {{ registryKind }}
     </span>
     <button
+      #inspectorToggle
+      mat-icon-button
+      type="button"
+      aria-label="Wire inspector"
+      title="Wire inspector (`)"
+      data-testid="toggle-inspector"
+      [attr.aria-pressed]="layout.inspectorOpen()"
+      (click)="layout.toggleInspector()"
+    >
+      <mat-icon>cable</mat-icon>
+    </button>
+    <button
       mat-icon-button
       type="button"
       data-testid="open-key-dialog"
@@ -49,6 +61,11 @@
     </button>
   </mat-toolbar>
 </header>
-<main class="p-4">
+<main class="p-4" [style.padding-bottom]="layout.inspectorOpen() ? '48vh' : null">
   <router-outlet />
 </main>
+@defer (on interaction(inspectorToggle); when layout.inspectorOpen(); prefetch on idle) {
+  @if (layout.inspectorOpen()) {
+    <app-wire-inspector />
+  }
+}

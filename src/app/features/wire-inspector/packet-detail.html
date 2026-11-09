@@ -1,0 +1,47 @@
+<section
+  aria-labelledby="packet-detail-title"
+  class="flex flex-col gap-2"
+  data-testid="packet-detail"
+>
+  <h3 id="packet-detail-title" class="m-0 text-sm font-semibold break-all text-on-surface">
+    {{ title() }}
+  </h3>
+  <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+    <dt class="text-on-surface-variant">Channel</dt>
+    <dd class="m-0" data-testid="detail-channel">{{ channel() }}</dd>
+    <dt class="text-on-surface-variant">Status</dt>
+    <dd class="m-0" data-testid="detail-status">{{ status() }}</dd>
+    <dt class="text-on-surface-variant">Time</dt>
+    <dd class="m-0">{{ packet().at | date: 'HH:mm:ss.SSS' }}</dd>
+    <dt class="text-on-surface-variant">Latency</dt>
+    <dd class="m-0">{{ latency() }}</dd>
+    <dt class="text-on-surface-variant">Size</dt>
+    <dd class="m-0">{{ packet().bytes }} bytes</dd>
+    <dt class="text-on-surface-variant">Correlation</dt>
+    <dd class="m-0 break-all">{{ packet().correlationId }}</dd>
+    @if (packet().runId; as runId) {
+      <dt class="text-on-surface-variant">Run</dt>
+      <dd class="m-0" data-testid="detail-run">{{ runId }}</dd>
+    }
+    @if (packet().model; as model) {
+      <dt class="text-on-surface-variant">Model</dt>
+      <dd class="m-0">{{ model }}</dd>
+      <dt class="text-on-surface-variant">Tokens</dt>
+      <dd class="m-0">{{ tokens() }}</dd>
+      <dt class="text-on-surface-variant">Cost</dt>
+      <dd class="m-0">{{ cost() }}</dd>
+    }
+  </dl>
+  <div>
+    <h4 class="m-0 mb-1 text-xs font-medium text-on-surface-variant">Request</h4>
+    <app-json-view [value]="packet().envelope.request" [initialDepth]="3" />
+  </div>
+  @if (packet().envelope.response; as response) {
+    <div>
+      <h4 class="m-0 mb-1 text-xs font-medium text-on-surface-variant">Response</h4>
+      <app-json-view [value]="response" [initialDepth]="3" />
+    </div>
+  } @else {
+    <p class="m-0 text-xs text-on-surface-variant">Waiting for a response…</p>
+  }
+</section>

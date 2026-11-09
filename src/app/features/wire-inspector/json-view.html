@@ -1,0 +1,44 @@
+@if (expandable()) {
+  <div class="flex flex-col" data-testid="json-node">
+    <button
+      type="button"
+      class="flex w-fit cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left font-mono text-xs text-on-surface"
+      data-testid="json-toggle"
+      [attr.aria-expanded]="open()"
+      (click)="toggle()"
+    >
+      <span aria-hidden="true" class="w-3 text-on-surface-variant">{{ open() ? '▾' : '▸' }}</span>
+      @if (name() !== null) {
+        <span class="text-primary">{{ name() }}:</span>
+      }
+      <span class="text-on-surface-variant">{{ summary() }}</span>
+    </button>
+    @if (open()) {
+      <ul class="m-0 ml-1.5 flex list-none flex-col border-l border-outline-variant p-0 pl-3">
+        @for (child of children(); track child.key) {
+          <li>
+            <app-json-view
+              [value]="child.value"
+              [name]="child.key"
+              [depth]="depth() + 1"
+              [initialDepth]="initialDepth()"
+            />
+          </li>
+        }
+      </ul>
+    }
+  </div>
+} @else {
+  <div class="flex gap-1 pl-4" data-testid="json-leaf">
+    @if (name() !== null) {
+      <span class="text-primary">{{ name() }}:</span>
+    }
+    @if (kind() === 'array' || kind() === 'object') {
+      <span class="text-on-surface-variant">{{ summary() }}</span>
+    } @else {
+      <span class="break-all whitespace-pre-wrap text-on-surface" [attr.data-kind]="kind()">{{
+        leafText()
+      }}</span>
+    }
+  </div>
+}

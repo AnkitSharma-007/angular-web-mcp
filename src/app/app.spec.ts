@@ -100,4 +100,42 @@ describe('App', () => {
     expect(TestBed.inject(LayoutStore).consoleOpen()).toBe(true);
     expect(TestBed.inject(PresenterActions).draft()?.text).toContain('pipeline summary');
   });
+  describe('wire inspector', () => {
+    const inspector = (root: HTMLElement) => root.querySelector('app-wire-inspector');
+
+    it('keeps the inspector out of the page until it is opened', async () => {
+      const { root } = await render();
+      expect(inspector(root)).toBeNull();
+      expect(
+        root.querySelector('[data-testid="toggle-inspector"]')?.getAttribute('aria-pressed'),
+      ).toBe('false');
+    });
+
+    it('loads the drawer when the toolbar button is pressed', async () => {
+      const { fixture, root } = await render();
+      root.querySelector<HTMLButtonElement>('[data-testid="toggle-inspector"]')?.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(inspector(root)).not.toBeNull();
+      });
+      expect(
+        root.querySelector('[data-testid="toggle-inspector"]')?.getAttribute('aria-pressed'),
+      ).toBe('true');
+      expect(root.querySelector('main')?.style.paddingBottom).toBe('48vh');
+    });
+
+    it('loads the drawer when the hotkey opens it and removes it when it closes', async () => {
+      const { fixture, root } = await render();
+      const layout = TestBed.inject(LayoutStore);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '`', cancelable: true }));
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(inspector(root)).not.toBeNull();
+      });
+      layout.toggleInspector();
+      await fixture.whenStable();
+      expect(inspector(root)).toBeNull();
+      expect(root.querySelector('main')?.style.paddingBottom).toBe('');
+    });
+  });
 });
