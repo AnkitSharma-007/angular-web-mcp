@@ -4,6 +4,7 @@ import { expectNoA11yViolations } from '../testing/a11y';
 import { App } from './app';
 import { appConfig } from './app.config';
 import { routes } from './app.routes';
+import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 describe('App', () => {
   beforeEach(() => {
@@ -60,6 +61,14 @@ describe('App', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(button?.getAttribute('aria-label')).toBe('Switch to dark theme');
     expect(localStorage.getItem('awm.theme')).toBe('light');
+  });
+
+  it('shows the registry kind chip', async () => {
+    TestBed.overrideProvider(REGISTRY_KIND, { useValue: 'polyfill' });
+    const { root } = await render();
+    const chip = root.querySelector('[data-testid="registry-chip"]');
+    expect(chip?.textContent?.trim()).toBe('WebMCP: polyfill');
+    expect(chip?.getAttribute('data-kind')).toBe('polyfill');
   });
 
   it('is free of axe violations', async () => {

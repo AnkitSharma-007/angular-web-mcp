@@ -4,6 +4,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme';
+import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,7 @@ import { ThemeService } from './core/services/theme';
 export class App {
   protected readonly title = 'Angular Web MCP';
   protected readonly theme = inject(ThemeService);
+  protected readonly registryKind = inject(REGISTRY_KIND);
   private readonly router = inject(Router);
 
   protected readonly dashboardActive = isActive('/dashboard', this.router, {
