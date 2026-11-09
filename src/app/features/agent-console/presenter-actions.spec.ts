@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { AgentSessionStore } from '../../mcp/agent/agent-session-store';
+import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
 import { LayoutStore } from '../layout/layout-store';
 import { PresenterActions, isTypingTarget } from './presenter-actions';
 
@@ -72,6 +73,15 @@ describe('PresenterActions', () => {
     expect(clear).toHaveBeenCalledOnce();
     expect(handler).toHaveBeenCalledOnce();
     expect(presenter.draft()).toBeNull();
+  });
+
+  it('also empties the wire telemetry on reset', () => {
+    const { presenter } = setup();
+    const telemetry = TestBed.inject(WireTelemetryStore);
+    telemetry.record({ channel: 'mcp', method: 'tools/list' }, { status: 'ok' });
+    expect(telemetry.entities()).toHaveLength(1);
+    presenter.reset();
+    expect(telemetry.entities()).toEqual([]);
   });
 
   it('stops calling a reset handler once it is unregistered', () => {

@@ -1,6 +1,7 @@
 import { Service, inject, signal } from '@angular/core';
 import { AgentSessionStore } from '../../mcp/agent/agent-session-store';
 import type { GeminiModelId } from '../../mcp/agent/gemini/gemini-models';
+import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
 import { LayoutStore } from '../layout/layout-store';
 import { demoPromptForKey } from './demo-prompts';
 
@@ -25,6 +26,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 export class PresenterActions {
   private readonly layout = inject(LayoutStore);
   private readonly session = inject(AgentSessionStore);
+  private readonly telemetry = inject(WireTelemetryStore);
 
   private readonly draftState = signal<PromptDraft | null>(null);
   private readonly resetHandlers = new Set<() => void>();
@@ -49,6 +51,7 @@ export class PresenterActions {
 
   reset(): void {
     this.session.clear();
+    this.telemetry.clear();
     this.draftState.set(null);
     this.resetHandlers.forEach((handler) => handler());
   }
