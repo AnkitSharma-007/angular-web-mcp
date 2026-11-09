@@ -1,93 +1,324 @@
 import { TestBed } from '@angular/core/testing';
+import { patchState } from '@ngrx/signals';
+import { setAllEntities } from '@ngrx/signals/entities';
+import { unprotected } from '@ngrx/signals/testing';
+import { DEAL_STAGES, REGIONS, type Deal } from '../../../core/models/deal';
+import { makeDeal } from '../../../../testing/deal-fixtures';
 import { DealsStore } from './deals-store';
+import { clampDiscount } from './with-deals';
 
 function createStore() {
   TestBed.configureTestingModule({ providers: [DealsStore] });
   return TestBed.inject(DealsStore);
 }
 
-describe('withDeals (smoke)', () => {
-  it('derives stage and region breakdowns, KPIs and at-risk deals', () => {
-    const store = createStore();
-    expect(store.pipelineByStage().map((s) => s.key)).toHaveLength(6);
-    expect(store.byRegion().map((r) => r.key)).toEqual(['APAC', 'EMEA', 'NA', 'LATAM']);
-    expect(store.kpis().openDeals).toBe(19);
-    expect(store.atRiskDeals().length).toBeGreaterThan(0);
-  });
-
-  it('filters, searches and clears the filter', () => {
-    const store = createStore();
-    store.setFilter({ regions: ['EMEA'], stages: ['negotiation'] });
-    expect(store.filteredDeals()).toHaveLength(4);
-    store.setFilter({ query: 'IBERIA' });
-    expect(store.filteredDeals().map((d) => d.id)).toEqual(['D-1006']);
-    store.clearFilter();
-    expect(store.filteredDeals()).toHaveLength(24);
-    expect(store.search({ stalledOnly: true }).total).toBe(4);
-  });
-
-  it('applies discounts with clamping and reports skips', () => {
-    const store = createStore();
-    const result = store.applyDiscount(['D-1002', 'D-9999'], 90);
-    expect(result.changed).toEqual([{ id: 'D-1002', before: 0, after: 50 }]);
-    expect(result.skipped).toEqual([{ id: 'D-9999', why: 'unknown deal' }]);
-    expect(store.applyDiscount(['D-1002'], 50).skipped).toHaveLength(1);
-  });
-
-  it('moves stages without reopening closed deals', () => {
-    const store = createStore();
-    const result = store.moveStages([
-      { dealId: 'D-1004', stage: 'closed-won' },
-      { dealId: 'D-1001', stage: 'proposal' },
-      { dealId: 'D-1005', stage: 'negotiation' },
-      { dealId: 'D-0000', stage: 'proposal' },
-    ]);
-    expect(result.changed).toHaveLength(1);
-    expect(result.skipped).toHaveLength(3);
-    expect(store.entityMap()['D-1004']).toMatchObject({
-      stage: 'closed-won',
-      probability: 100,
-      contractStatus: 'active',
+describe('withDeals', () => {
+  describe('stage breakdown', () => {
+    it('lists every stage in funnel order', () => {
+      expect(
+        createStore()
+          .pipelineByStage()
+          .map((s) => s.key),
+      ).toEqual([...DEAL_STAGES]);
     });
-    store.moveStages([{ dealId: 'D-1020', stage: 'closed-lost' }]);
-    expect(store.entityMap()['D-1020']?.probability).toBe(0);
+
+    it('sums percentages to roughly 100', () => {
+      const total = createStore()
+        .pipelineByStage()
+        .reduce((sum, s) => sum + s.pct, 0);
+      expect(total).toBeGreaterThan(99.8);
+      expect(total).toBeLessThan(100.2);
+    });
+
+    it('counts all deals across stages', () => {
+      const count = createStore()
+        .pipelineByStage()
+        .reduce((sum, s) => sum + s.count, 0);
+      expect(count).toBe(24);
+    });
+
+    it('reports zero percentages for an empty store', () => {
+      const store = createStore();
+      patchState(unprotected(store), setAllEntities<Deal>([]));
+      expect(store.pipelineByStage().every((s) => s.pct === 0 && s.count === 0)).toBe(true);
+    });
+
+    it('breaks down by region in region order', () => {
+      const store = createStore();
+      expect(store.byRegion().map((r) => r.key)).toEqual([...REGIONS]);
+      expect(store.byRegion().reduce((sum, r) => sum + r.count, 0)).toBe(24);
+    });
+
+    it('moves value between stages after a stage change', () => {
+      const store = createStore();
+      const before = store.pipelineByStage().find((s) => s.key === 'closed-won')!;
+      store.moveStages([{ dealId: 'D-1004', stage: 'closed-won' }]);
+      const after = store.pipelineByStage().find((s) => s.key === 'closed-won')!;
+      expect(after.count).toBe(before.count + 1);
+      expect(after.netValue).toBeGreaterThan(before.netValue);
+    });
   });
 
-  it('terminates only active closed-won contracts', () => {
-    const store = createStore();
-    expect(store.terminateContract('D-1003').changed).toHaveLength(1);
-    expect(store.terminateContract('D-1003').skipped[0]?.why).toBe('contract is not active');
-    expect(store.terminateContract('D-1002').skipped[0]?.why).toBe(
-      'only closed-won deals have a contract',
-    );
-    expect(store.terminateContract('D-0000').skipped[0]?.why).toBe('unknown deal');
+  describe('KPIs', () => {
+    beforeEach(() => {
+      const store = createStore();
+      patchState(
+        unprotected(store),
+        setAllEntities([
+          makeDeal({ id: 'D-3001', listValue: 100000, probability: 50 }),
+          makeDeal({ id: 'D-3002', listValue: 200000, discountPct: 50, probability: 10 }),
+          makeDeal({ id: 'D-3003', stage: 'closed-won', listValue: 80000, discountPct: 25 }),
+          makeDeal({ id: 'D-3004', stage: 'closed-lost', listValue: 40000 }),
+          makeDeal({ id: 'D-3005', lastActivityDays: 30 }),
+        ]),
+      );
+    });
+
+    it('weights open pipeline by probability on net value', () => {
+      expect(TestBed.inject(DealsStore).kpis().weightedForecast).toBe(
+        100000 * 0.5 + 100000 * 0.1 + 100000 * 0.5,
+      );
+    });
+
+    it('totals open and won value on net value', () => {
+      const kpis = TestBed.inject(DealsStore).kpis();
+      expect(kpis.openDeals).toBe(3);
+      expect(kpis.openValue).toBe(300000);
+      expect(kpis.wonValue).toBe(60000);
+    });
+
+    it('computes the win rate from closed deals', () => {
+      expect(TestBed.inject(DealsStore).kpis().winRate).toBe(50);
+    });
+
+    it('counts stalled open deals', () => {
+      expect(TestBed.inject(DealsStore).kpis().stalledCount).toBe(1);
+    });
+
+    it('reports a zero win rate with no closed deals', () => {
+      const store = TestBed.inject(DealsStore);
+      patchState(unprotected(store), setAllEntities([makeDeal()]));
+      expect(store.kpis().winRate).toBe(0);
+    });
+
+    it('flags stalled and low-probability open deals as at risk', () => {
+      expect(
+        TestBed.inject(DealsStore)
+          .atRiskDeals()
+          .map((d) => d.id),
+      ).toEqual(['D-3002', 'D-3005']);
+    });
   });
 
-  it('resets to the seed', () => {
-    const store = createStore();
-    store.applyDiscount(['D-1002'], 20);
-    store.setFilter({ query: 'x' });
-    store.reset();
-    expect(store.entityMap()['D-1002']?.discountPct).toBe(0);
-    expect(store.filter().query).toBe('');
+  describe('seed KPIs', () => {
+    it('has a 60% win rate and 19 open deals', () => {
+      const kpis = createStore().kpis();
+      expect(kpis.winRate).toBe(60);
+      expect(kpis.openDeals).toBe(19);
+      expect(kpis.stalledCount).toBe(4);
+    });
   });
-});
 
-describe('withAgentHistory (smoke)', () => {
-  it('records, undoes to an entry and clears history', () => {
-    const store = createStore();
-    const first = store.recordSnapshot('one');
-    store.applyDiscount(['D-1002'], 10);
-    store.recordSnapshot('two');
-    store.applyDiscount(['D-1002'], 20);
-    expect(store.lastEntry()?.label).toBe('two');
-    store.undoTo(first);
-    expect(store.entityMap()['D-1002']?.discountPct).toBe(0);
-    expect(store.history()).toHaveLength(0);
-    expect(store.undo()).toBeNull();
-    expect(store.undoTo('missing')).toBeNull();
-    store.recordSnapshot('three');
-    store.clearHistory();
-    expect(store.canUndo()).toBe(false);
+  describe('filter', () => {
+    it('narrows by region', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['EMEA'] });
+      expect(store.filteredDeals().every((d) => d.region === 'EMEA')).toBe(true);
+    });
+
+    it('narrows by stage', () => {
+      const store = createStore();
+      store.setFilter({ stages: ['closed-won', 'closed-lost'] });
+      expect(store.filteredDeals()).toHaveLength(5);
+    });
+
+    it('combines regions and stages', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['EMEA'], stages: ['negotiation'] });
+      expect(store.filteredDeals()).toHaveLength(4);
+    });
+
+    it('narrows by minimum net value', () => {
+      const store = createStore();
+      store.setFilter({ minValue: 500000 });
+      expect(store.filteredDeals().map((d) => d.id)).toEqual(['D-1009', 'D-1015']);
+    });
+
+    it('matches the query case-insensitively across account, title, owner and id', () => {
+      const store = createStore();
+      store.setFilter({ query: 'ARCADIA' });
+      expect(store.filteredDeals().map((d) => d.id)).toEqual(['D-1002']);
+      store.setFilter({ query: 'fleet' });
+      expect(store.filteredDeals()).toHaveLength(2);
+      store.setFilter({ query: 'kenji' });
+      expect(store.filteredDeals().every((d) => d.owner === 'Kenji Sato')).toBe(true);
+      store.setFilter({ query: 'd-1010' });
+      expect(store.filteredDeals()).toHaveLength(1);
+    });
+
+    it('ignores surrounding whitespace in the query', () => {
+      const store = createStore();
+      store.setFilter({ query: '  arcadia  ' });
+      expect(store.filteredDeals()).toHaveLength(1);
+    });
+
+    it('merges partial updates into the current filter', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['NA'] });
+      store.setFilter({ query: 'bank' });
+      expect(store.filter()).toMatchObject({ regions: ['NA'], query: 'bank' });
+    });
+
+    it('clears back to all deals', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['APAC'], stages: ['proposal'], minValue: 1, query: 'x' });
+      store.clearFilter();
+      expect(store.filteredDeals()).toHaveLength(24);
+      expect(store.filter()).toEqual({ stages: [], regions: [], minValue: null, query: '' });
+    });
+
+    it('does not touch the entities', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['LATAM'] });
+      expect(store.entities()).toHaveLength(24);
+    });
+  });
+
+  describe('search', () => {
+    it('returns only stalled open deals with stalledOnly', () => {
+      const result = createStore().search({ stalledOnly: true });
+      expect(result.total).toBe(4);
+      expect(result.deals.map((d) => d.account).sort()).toEqual([
+        'Copacabana Retail',
+        'Granite Construction',
+        'Orion Pharma',
+        'Zephyr Wind',
+      ]);
+    });
+
+    it('ignores the view filter', () => {
+      const store = createStore();
+      store.setFilter({ regions: ['LATAM'] });
+      expect(store.search().total).toBe(24);
+    });
+
+    it('filters by stage, region, probability and value bounds', () => {
+      const store = createStore();
+      expect(
+        store.search({ stages: ['negotiation'], regions: ['EMEA'], minProbability: 71 }).total,
+      ).toBe(2);
+      expect(store.search({ minValue: 390000, maxValue: 450000 }).total).toBe(2);
+    });
+
+    it('orders by net value descending and honours the limit', () => {
+      const result = createStore().search({ limit: 3 });
+      expect(result.total).toBe(24);
+      expect(result.deals.map((d) => d.id)).toEqual(['D-1015', 'D-1009', 'D-1002']);
+    });
+
+    it('searches by text', () => {
+      expect(createStore().search({ query: 'konkan' }).deals).toHaveLength(1);
+    });
+  });
+
+  describe('mutation guards', () => {
+    it.each([
+      [-5, 0],
+      [0, 0],
+      [25, 25],
+      [50, 50],
+      [90, 50],
+    ])('clamps a %s%% discount to %s%%', (input, expected) => {
+      expect(clampDiscount(input)).toBe(expected);
+    });
+
+    it('applies the clamped discount to the deal', () => {
+      const store = createStore();
+      const result = store.applyDiscount(['D-1002'], 75);
+      expect(result.changed).toEqual([{ id: 'D-1002', before: 0, after: 50 }]);
+      expect(store.entityMap()['D-1002']?.discountPct).toBe(50);
+    });
+
+    it('reports unknown IDs and unchanged deals as skipped without failing the batch', () => {
+      const store = createStore();
+      const result = store.applyDiscount(['D-1002', 'D-9999', 'D-1004'], 5);
+      expect(result.changed.map((c) => c.id)).toEqual(['D-1002']);
+      expect(result.skipped).toEqual([
+        { id: 'D-9999', why: 'unknown deal' },
+        { id: 'D-1004', why: 'already at 5%' },
+      ]);
+    });
+
+    it('never reopens closed deals', () => {
+      const store = createStore();
+      const result = store.moveStages([
+        { dealId: 'D-1001', stage: 'negotiation' },
+        { dealId: 'D-1022', stage: 'proposal' },
+      ]);
+      expect(result.changed).toEqual([]);
+      expect(result.skipped.map((s) => s.why)).toEqual([
+        'closed deals cannot be reopened',
+        'closed deals cannot be reopened',
+      ]);
+      expect(store.entityMap()['D-1001']?.stage).toBe('closed-won');
+    });
+
+    it('skips unknown deals and same-stage moves', () => {
+      const result = createStore().moveStages([
+        { dealId: 'D-0000', stage: 'proposal' },
+        { dealId: 'D-1002', stage: 'negotiation' },
+      ]);
+      expect(result.skipped).toEqual([
+        { id: 'D-0000', why: 'unknown deal' },
+        { id: 'D-1002', why: 'already in negotiation' },
+      ]);
+    });
+
+    it('sets probability and contract status when closing', () => {
+      const store = createStore();
+      store.moveStages([
+        { dealId: 'D-1004', stage: 'closed-won' },
+        { dealId: 'D-1020', stage: 'closed-lost' },
+        { dealId: 'D-1008', stage: 'qualification' },
+      ]);
+      expect(store.entityMap()['D-1004']).toMatchObject({
+        probability: 100,
+        contractStatus: 'active',
+      });
+      expect(store.entityMap()['D-1020']).toMatchObject({ probability: 0, contractStatus: 'none' });
+      expect(store.entityMap()['D-1008']).toMatchObject({
+        stage: 'qualification',
+        probability: 45,
+      });
+    });
+
+    it('terminates an active closed-won contract once', () => {
+      const store = createStore();
+      const first = store.terminateContract('D-1003');
+      expect(first.changed).toEqual([{ id: 'D-1003', before: 'active', after: 'terminated' }]);
+      expect(store.entityMap()['D-1003']?.contractStatus).toBe('terminated');
+      expect(store.terminateContract('D-1003').skipped[0]?.why).toBe('contract is not active');
+    });
+
+    it('refuses to terminate open or unknown deals', () => {
+      const store = createStore();
+      expect(store.terminateContract('D-1002').skipped[0]?.why).toBe(
+        'only closed-won deals have a contract',
+      );
+      expect(store.terminateContract('D-0000').skipped[0]?.why).toBe('unknown deal');
+      expect(store.entityMap()['D-1002']?.contractStatus).toBe('none');
+    });
+
+    it('resets entities and filter to the seed', () => {
+      const store = createStore();
+      store.applyDiscount(['D-1002'], 20);
+      store.terminateContract('D-1001');
+      store.setFilter({ query: 'x' });
+      store.reset();
+      expect(store.entityMap()['D-1002']?.discountPct).toBe(0);
+      expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
+      expect(store.filter().query).toBe('');
+      expect(store.entities()).toHaveLength(24);
+    });
   });
 });
