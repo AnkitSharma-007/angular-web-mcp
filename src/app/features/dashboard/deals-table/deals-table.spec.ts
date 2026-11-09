@@ -55,6 +55,14 @@ describe('DealsTable', () => {
     );
   });
 
+  it('shows exactly the EMEA deals under an EMEA filter', async () => {
+    const { fixture, store, table } = await setup();
+    store.setFilter({ regions: ['EMEA'] });
+    await fixture.whenStable();
+    const emea = store.entities().filter((deal) => deal.region === 'EMEA').length;
+    expect(await (await table()).getRows()).toHaveLength(emea);
+  });
+
   it('removes a filter when its chip is removed', async () => {
     const { fixture, loader, store } = await setup();
     store.setFilter({ regions: ['EMEA'] });

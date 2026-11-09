@@ -26,6 +26,49 @@ describe('PipelineChart', () => {
     );
   });
 
+  it('sizes each rect in proportion to its share of net value', async () => {
+    const { root, store } = await render();
+    const rects = Array.from(root.querySelectorAll('svg[role="img"] rect'));
+    const widths = rects.map((rect) => Number(rect.getAttribute('width')));
+    expect(widths).toEqual(store.pipelineByStage().map((stage) => stage.pct));
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(100, 0);
+    const xs = rects.map((rect) => Number(rect.getAttribute('x')));
+    expect(xs[0]).toBe(0);
+    expect(xs[1]).toBeCloseTo(widths[0] ?? 0, 5);
+  });
+
+  it('recomputes widths after deals move stage', async () => {
+    const { fixture, root, store } = await render();
+    const widthOf = (stage: string) =>
+      Number(root.querySelector(`rect[data-stage="${stage}"]`)?.getAttribute('width'));
+    const before = { negotiation: widthOf('negotiation'), won: widthOf('closed-won') };
+    store.moveStages([
+      { dealId: 'D-1004', stage: 'closed-won' },
+      { dealId: 'D-1005', stage: 'closed-won' },
+    ]);
+    await fixture.whenStable();
+    expect(widthOf('negotiation')).toBeLessThan(before.negotiation);
+    expect(widthOf('closed-won')).toBeGreaterThan(before.won);
+  });
+
+  it('keeps the sr-only table in step with the bars', async () => {
+    const { fixture, root, store } = await render();
+    const rows = () =>
+      Array.from(root.querySelectorAll('table.sr-only tbody tr')).map((row) =>
+        Array.from(row.children).map((cell) => cell.textContent?.trim()),
+      );
+    expect(rows()).toHaveLength(6);
+    store.moveStages([{ dealId: 'D-1004', stage: 'closed-lost' }]);
+    await fixture.whenStable();
+    const lost = store.pipelineByStage().find((stage) => stage.key === 'closed-lost');
+    expect(rows()[5]).toEqual([
+      'Closed Lost',
+      String(lost?.count),
+      expect.any(String),
+      `${lost?.pct}%`,
+    ]);
+  });
+
   it('lists every region', async () => {
     const { root } = await render();
     const regions = Array.from(root.querySelectorAll('ul[aria-label="Net value by region"] li'));
