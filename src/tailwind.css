@@ -1,0 +1,48 @@
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --color-primary: var(--mat-sys-primary);
+  --color-on-primary: var(--mat-sys-on-primary);
+  --color-surface: var(--mat-sys-surface);
+  --color-on-surface: var(--mat-sys-on-surface);
+  --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-outline-variant: var(--mat-sys-outline-variant);
+  --color-error: var(--mat-sys-error);
+  --color-success: var(--app-success);
+}
+
+@utility glass {
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 62%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
+  box-shadow:
+    inset 0 2px 0 var(--glass-accent, transparent),
+    0 8px 32px color-mix(in srgb, black 18%, transparent);
+}
+
+@utility glow {
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--glow-color, var(--mat-sys-primary)) 40%, transparent);
+  transition: box-shadow 200ms ease-out;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@utility glass-accent-primary {
+  --glass-accent: var(--mat-sys-primary);
+}
+
+@utility glass-accent-warn {
+  --glass-accent: var(--mat-sys-error);
+}
+
+@utility glass-accent-success {
+  --glass-accent: var(--app-success);
+}

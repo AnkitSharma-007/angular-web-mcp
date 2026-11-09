@@ -12,6 +12,11 @@ describe('App', () => {
     });
   });
 
+  afterEach(() => {
+    localStorage.clear();
+    document.documentElement.classList.remove('dark');
+  });
+
   it('renders its title', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -32,6 +37,16 @@ describe('App', () => {
 
   it('blocks network access in unit tests', () => {
     expect(() => fetch('/api')).toThrow('Unexpected network call');
+  });
+
+  it('toggles the theme from the toolbar', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const button = (fixture.nativeElement as HTMLElement).querySelector('button');
+    button?.click();
+    await fixture.whenStable();
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(button?.getAttribute('aria-label')).toBe('Switch to dark theme');
   });
 
   it('configures providers for the application', () => {

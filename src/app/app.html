@@ -1,6 +1,17 @@
-<header>
-  <h1>{{ title }}</h1>
+<header class="sticky top-0 z-10">
+  <mat-toolbar class="glass [--mat-toolbar-container-background-color:transparent]">
+    <h1 class="m-0 text-xl font-semibold tracking-tight">{{ title }}</h1>
+    <span class="flex-1"></span>
+    <button
+      mat-icon-button
+      type="button"
+      [attr.aria-label]="theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme'"
+      (click)="theme.toggle()"
+    >
+      <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+  </mat-toolbar>
 </header>
-<main>
+<main class="p-4">
   <router-outlet />
 </main>

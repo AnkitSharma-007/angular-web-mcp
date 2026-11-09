@@ -1,5 +1,6 @@
 import type { ApplicationConfig } from '@angular/core';
 import { provideBrowserGlobalErrorListeners } from '@angular/core';
+import { MAT_ICON_DEFAULT_OPTIONS } from '@angular/material/icon';
 import {
   provideRouter,
   withAutoCleanupInjectors,
@@ -11,5 +12,6 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withAutoCleanupInjectors(), withComponentInputBinding()),
+    { provide: MAT_ICON_DEFAULT_OPTIONS, useValue: { fontSet: 'material-symbols-outlined' } },
   ],
 };
