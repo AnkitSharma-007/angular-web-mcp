@@ -239,13 +239,8 @@ src/
 
 ```ts
 type DealStage =
-  | "prospecting"
-  | "qualification"
-  | "proposal"
-  | "negotiation"
-  | "closed-won"
-  | "closed-lost";
-type Region = "APAC" | "EMEA" | "NA" | "LATAM";
+  'prospecting' | 'qualification' | 'proposal' | 'negotiation' | 'closed-won' | 'closed-lost';
+type Region = 'APAC' | 'EMEA' | 'NA' | 'LATAM';
 interface Deal {
   id: string;
   account: string;
@@ -257,7 +252,7 @@ interface Deal {
   discountPct: number;
   probability: number;
   closeDate: string;
-  contractStatus: "none" | "active" | "terminated";
+  contractStatus: 'none' | 'active' | 'terminated';
   contactEmail: string;
   lastActivityDays: number;
 }
@@ -321,10 +316,7 @@ export function withWebMcpTools(tools: () => readonly ToolDescriptor[]) {
     withHooks(() => {
       const injector = inject(Injector);
       return {
-        onInit: () =>
-          tools().forEach(
-            (t) => void declareExperimentalWebMcpTool(t, injector),
-          ),
+        onInit: () => tools().forEach((t) => void declareExperimentalWebMcpTool(t, injector)),
       };
     }),
   );
@@ -393,10 +385,7 @@ Inside `execute(args, { signal })`:
 ```ts
 interface HumanApprovalGate {
   readonly pending: Signal<ApprovalRequest | null>;
-  request(
-    r: ApprovalRequest,
-    signal: AbortSignal,
-  ): Promise<{ approved: boolean; note?: string }>;
+  request(r: ApprovalRequest, signal: AbortSignal): Promise<{ approved: boolean; note?: string }>;
 }
 ```
 
@@ -436,31 +425,25 @@ interface HumanApprovalGate {
 
 ```ts
 type AgentEvent =
-  | { type: "thought" | "text-delta"; text: string }
-  | { type: "tool-call"; callId: string; name: string; args: unknown }
+  | { type: 'thought' | 'text-delta'; text: string }
+  | { type: 'tool-call'; callId: string; name: string; args: unknown }
   | {
-      type: "tool-result";
+      type: 'tool-result';
       callId: string;
       name: string;
       result: unknown;
       ok: boolean;
       latencyMs: number;
     }
-  | { type: "tools-changed"; added: string[]; removed: string[] }
-  | { type: "awaiting-approval"; toolName: string }
+  | { type: 'tools-changed'; added: string[]; removed: string[] }
+  | { type: 'awaiting-approval'; toolName: string }
   | {
-      type: "error";
+      type: 'error';
       message: string;
-      kind:
-        | "auth"
-        | "quota"
-        | "model-access"
-        | "network"
-        | "max-steps"
-        | "unknown";
+      kind: 'auth' | 'quota' | 'model-access' | 'network' | 'max-steps' | 'unknown';
     }
   | {
-      type: "done";
+      type: 'done';
       usage: { input: number; output: number; thinking: number };
       costUsd: number;
       model: string;
@@ -490,17 +473,17 @@ interface WirePacket {
   at: number;
   correlationId: string;
   runId?: string;
-  channel: "mcp" | "llm" | "hitl" | "human";
+  channel: 'mcp' | 'llm' | 'hitl' | 'human';
   method:
-    | "tools/list"
-    | "tools/call"
-    | "notifications/tools/list_changed"
-    | "generateContent"
-    | "hitl/requested"
-    | "hitl/resolved"
-    | "human/undo";
+    | 'tools/list'
+    | 'tools/call'
+    | 'notifications/tools/list_changed'
+    | 'generateContent'
+    | 'hitl/requested'
+    | 'hitl/resolved'
+    | 'human/undo';
   envelope: unknown;
-  status: "pending" | "ok" | "error" | "rejected";
+  status: 'pending' | 'ok' | 'error' | 'rejected';
   latencyMs?: number;
   bytes: number;
   model?: string;
@@ -580,17 +563,14 @@ There is no fallback, so reliability is **measured and tuned**. The Lab (`/dashb
 
 ```ts
 interface ActEval {
-  id: "act1" | "act2" | "act3" | "act4";
+  id: 'act1' | 'act2' | 'act3' | 'act4';
   prompts: string[]; // stage prompt + paraphrases (anti-overfitting)
   model: GeminiModelId;
   requiredSequence: string[]; // ordered subsequence
-  allowedExtras: "read-only" | "none";
+  allowedExtras: 'read-only' | 'none';
   forbidden: string[];
-  approvals?: ("approve" | "reject")[]; // scripted HITL decisions
-  assertState: (
-    deals: DealsStoreView,
-    proposals: ProposalsView,
-  ) => string | null;
+  approvals?: ('approve' | 'reject')[]; // scripted HITL decisions
+  assertState: (deals: DealsStoreView, proposals: ProposalsView) => string | null;
 }
 ```
 
@@ -1223,3 +1203,51 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Blueprint deviation (non-functional):** commits 3.1 and 3.2 each shipped working specs for the pieces they introduced, so they stay above the coverage gate. Commit 3.3 added the cross-cutting scenarios (chart proportions and reactivity, sr-only table sync, EMEA filter, route sharing and destruction, axe on the full app at `/dashboard`).
 - **Ready for Session 4:**
   - **WebMCP Platform & Read Tools (Act 1).** It starts with 4.1: `feat(mcp): add registry bootstrap, polyfill fallback and JSON-schema argument validator`, which also needs `npm i -E @mcp-b/webmcp-polyfill@6.0.3`. Then 4.2 adds `defineTool` and the read tools to the `dashboard` route `providers`, and 4.3 tests them.
+
+## Handoff Note: Session 4 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/mcp/registry/model-context.ts`:
+    - Types: `RegistryKind` (`'native' | 'polyfill' | 'shim'`), `ModelContextRegistry` (`registerTool(tool, { signal })`, `getTools()`, `executeTool(name, args, { signal })`, plus `EventTarget` for `toolchange`), `RegistryTool`, `RegistryToolInfo`, `RegistryToolClient`.
+    - `findModelContext(doc?)`: `document.modelContext ?? navigator.modelContext ?? null`. It swallows a throwing getter, which the polyfill can leave behind.
+  - `src/app/mcp/registry/ensure-model-context.ts`: `ensureModelContext(doc?): Promise<RegistryKind>`. It tries native, then a dynamic `import('@mcp-b/webmcp-polyfill')` and `installWebMCP()`, then `RegistryShim`.
+  - `src/app/mcp/registry/registry-shim.ts`: `RegistryShim` (an `EventTarget` registry). It sorts `getTools()`, throws `Tool already registered: <name>` on a duplicate, unregisters on abort and fires `toolchange` on every change. `tools` is `protected`.
+  - `src/app/mcp/registry/registry-kind.ts`: `REGISTRY_KIND` (`InjectionToken<RegistryKind>`, default factory `'shim'`). `main.ts` provides the real value through `mergeApplicationConfig`. The toolbar chip in `app.html` shows it as `WebMCP: <kind>` (`data-testid="registry-chip"`, `data-kind`).
+  - `src/app/mcp/schema/validate-args.ts`: `validateArgs(schema, value): ValidationIssue[]`, `formatIssues`, `JsonSchema`, `ValidationIssue {path, message}`. It supports type, required, `additionalProperties: false`, enum, minimum/maximum, minLength/maxLength, pattern, items, minItems/maxItems. Paths look like `updates[1].stage`, and a root-level issue has the path `''`.
+  - `src/app/mcp/tooling/tool-errors.ts`: `ToolInputError(message, issues)` and `ToolInputError.fromIssues(toolName, issues)`. Its message is `Invalid input for <tool>: <path>: <msg>; …`.
+  - `src/app/mcp/tooling/approval-gate.ts`: `HUMAN_APPROVAL_GATE` (an `InjectionToken` with **no default**), `HumanApprovalGate {pending, request(req, signal)}`, `ApprovalRequest {toolName, risk: 'high'|'critical', summary, reason?, details?}`, `ApprovalDecision {approved, note?}`, `ApprovalRisk`. Session 6 implements it in `ApprovalService` and may extend `ApprovalRequest`.
+  - `src/app/mcp/tooling/with-telemetry.ts`: `TOOL_TELEMETRY` (`InjectionToken<ToolTelemetry>`, default is a no-op), `ToolTelemetry.begin(toolName, args): ToolSpan`, `ToolSpan.end(status: 'ok'|'error'|'rejected', { latencyMs, error? })`. **Session 5 should provide a real implementation backed by `WireTelemetryStore`** (for example `{ provide: TOOL_TELEMETRY, useExisting: … }`).
+  - `src/app/mcp/tooling/with-validation.ts`: `validateToolArgs(toolName, schema, args)` throws `ToolInputError`. `undefined` or `null` args are validated as `{}`.
+  - `src/app/mcp/tooling/define-tool.ts`: `defineTool<A, D>(def): WebMcpToolDescriptor`, `ToolDefinition`, `ToolContext {signal, now()}`, `ToolResult`, `toToolResult(value)`.
+    - Fields: `name`, `title?`, `description`, `inputSchema`, `annotations?`, `deps?: () => D`, `risk?: (args) => ApprovalRequest | null`, `snapshot?: (args) => void`, `run(args, ctx, deps)`.
+    - Order: telemetry span, validation, approval (if `risk` returns a request), snapshot, `run`.
+    - Rejection, from the human or from a missing gate, returns `{ status: 'rejected_by_human', note? }` as a normal result and closes the span as `rejected`. Errors rethrow and close the span as `error`.
+    - Latency is measured with `CLOCK`.
+  - `src/app/features/dashboard/tools/deal-context-tools.ts`: `DEAL_CONTEXT_TOOLS` (`getPipelineSummary`, `searchDeals`, `getDealDetails`), `DealRow`, `toDealRow(deal)`. The tools are wired in `app.routes.ts` as `provideExperimentalWebMcpTools(DEAL_CONTEXT_TOOLS)` in the `dashboard` route `providers`.
+  - `src/testing/fake-model-context.ts`: `FakeModelContext` (a `RegistryShim` plus `toolNames()` and `reset()`), `installFakeModelContext()`, `uninstallFakeModelContext()`.
+  - `src/testing/test-providers.ts`: `useFakeModelContext()` registers `beforeEach` and `afterEach` hooks and returns `{ current }`. `provideRegistryKind(kind)` is a provider helper.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (263 tests; statements 98.2 %, branches 98.6 %, functions 95.6 %, lines 98.0 %) and `npm run build` all pass on each of the 3 commits. `main` is about 427 kB raw before compression.
+  - **Not verified in a real browser:** the 4.2 acceptance ("Chrome Tool Inspector lists 3 tools, and they vanish on `/about`") was not run. The same behaviour is covered by `context-tools-registration.spec.ts` against the fake registry. Run `npm start` with `chrome://flags/#enable-webmcp-testing` when convenient.
+  - **Install permission:** `npm i -E @mcp-b/webmcp-polyfill@6.0.3` was blocked twice by the auto-mode classifier, and the user ran it manually. Later sessions that need new packages (`@angular/aria`, `@google/genai`) may hit the same block.
+  - **A6 verified:** the polyfill exposes `installWebMCP()`. It does **nothing outside a secure context** (`globalThis.isSecureContext`) and throws a `TypeError` if the realm is frozen. A venue served over plain `http://` on a non-localhost host therefore ends up on the `shim`, and the chip says so. The shim works for the in-app agent, but external agents such as the Chrome Tool Inspector won't see it.
+  - **Types:** the polyfill's `webmcp-types` augments `Document.modelContext`, so casting a `Document` straight to a holder type fails with TS2352. Cast through `unknown`, as `findModelContext` does. `WebMcpToolDescriptor` (the `ToolDescriptor` alias) is exported from `@angular/core`, and `execute` there takes `(args, client)`.
+  - **Mocking the polyfill in specs:** use `vi.hoisted` plus `vi.mock('@mcp-b/webmcp-polyfill', () => ({ installWebMCP }))` (see `ensure-model-context.spec.ts`). Clear `document.modelContext` with `delete` between tests.
+  - **D5 in practice:** `execute` is an `async` arrow, so everything before its first `await` still runs in the injection context. `inject(TOOL_TELEMETRY)`, `inject(HUMAN_APPROVAL_GATE, { optional: true })`, `inject(CLOCK)` and `def.deps()` all run there. A tool body that needs the store declares `deps: () => inject(DealsStore)` and receives it as `run`'s third argument. **Never call `inject()` inside `run`**. The spec "fails with NG0203" proves this.
+  - **Testing a tool through `defineTool`:** `runInInjectionContext(TestBed.inject(EnvironmentInjector), () => tool.execute(args, client))`. To test registration, use `provideExperimentalWebMcpTools(...)` in `TestBed` providers and call `registry.executeTool(name, args)` on the fake. A `TestBed` teardown destroys the injector, which aborts the registration signals.
+  - **Route tests:** after navigating away from `/dashboard`, call `TestBed.tick()` before asserting that the tools are gone. `provideRouter(routes, withAutoCleanupInjectors())` is required.
+  - **Tool output shapes:**
+    - `getPipelineSummary.topDeals` holds the 5 largest **open** deals by net value, as `DealRow`s.
+    - `searchDeals` calls `store.search`, which ignores the table filter. `total` is the full match count.
+    - An unknown `getDealDetails` ID throws `ToolInputError` with the message `Unknown deal <id>. Use searchDeals to find valid deal IDs.`
+  - **Annotations:** the three read tools set `readOnlyHint`, and `getDealDetails` also sets `untrustedContentHint`.
+  - **Descriptions are first-draft** and will be tuned through the Lab (§5.2). `searchDeals` already points to `setDealFilter` for view changes, but that tool doesn't exist until Session 5.
+  - **`ProposalsStore`** is still not in the `dashboard` providers (Session 7).
+  - **Blueprint deviations (non-functional):**
+    - `ApprovalRequest`, `HumanApprovalGate` and `HUMAN_APPROVAL_GATE` shipped in `approval-gate.ts` now (the blueprint calls it "the token"), because `defineTool` needs them.
+    - `with-human-approval.ts` and `with-snapshot.ts` from the §2 tree are folded into `define-tool.ts`.
+    - `registry-shim.ts`, `registry-kind.ts` and `tool-errors.spec.ts` are additions.
+    - The registry chip and `app.spec.ts` chip test went into 4.1.
+    - Commit 4.2 had no new specs of its own (the gate held at about 89 % coverage), and 4.3 added all of them.
+- **Ready for Session 5:**
+  - **Telemetry, `withWebMcpTools()` & Batch Tools (Act 2).** It starts with 5.1: `feat(telemetry): add wire telemetry store with JSON-RPC envelopes, stats and key redaction`. Wire `TOOL_TELEMETRY` to the new store there.
