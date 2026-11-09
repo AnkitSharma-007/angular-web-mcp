@@ -2,6 +2,7 @@ import { inject, type WebMcpToolDescriptor } from '@angular/core';
 import { CLOCK } from '../../core/util/clock';
 import type { JsonSchema } from '../schema/validate-args';
 import { HUMAN_APPROVAL_GATE, type ApprovalRequest } from './approval-gate';
+import { requireApproval } from './with-human-approval';
 import { takeSnapshot, type Snapshotter } from './with-snapshot';
 import { TOOL_TELEMETRY, type ToolStatus } from './with-telemetry';
 import { validateToolArgs } from './with-validation';
@@ -62,14 +63,8 @@ export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDe
 
         const request = def.risk?.(args) ?? null;
         if (request) {
-          const decision = gate
-            ? await gate.request(request, ctx.signal)
-            : { approved: false, note: 'no human approval gate is available' };
-          if (!decision.approved) {
-            const rejection = {
-              status: 'rejected_by_human',
-              ...(decision.note !== undefined && { note: decision.note }),
-            };
+          const rejection = await requireApproval(gate, request, ctx.signal);
+          if (rejection) {
             finish('rejected', { result: rejection });
             return toToolResult(rejection);
           }

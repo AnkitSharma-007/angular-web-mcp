@@ -2,11 +2,21 @@ import { InjectionToken, type Signal } from '@angular/core';
 
 export type ApprovalRisk = 'high' | 'critical';
 
+export interface ApprovalDiffRow {
+  label: string;
+  field: string;
+  before: string;
+  after: string;
+  note?: string;
+}
+
 export interface ApprovalRequest {
   toolName: string;
   risk: ApprovalRisk;
   summary: string;
   reason?: string;
+  policy?: string[];
+  diff?: ApprovalDiffRow[];
   details?: unknown;
 }
 

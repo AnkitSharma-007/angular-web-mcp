@@ -2,6 +2,8 @@ import { inject, type Signal, type WebMcpToolDescriptor } from '@angular/core';
 import {
   DEAL_STAGES,
   REGIONS,
+  DEAL_STAGE_LABELS,
+  type ContractStatus,
   type Deal,
   type DealFilter,
   type DealStage,
@@ -9,9 +11,10 @@ import {
 } from '../../../core/models/deal';
 import type { MutationResult } from '../../../core/models/mutation-result';
 import type { HistoryEntry } from '../../../core/store-features/with-agent-history';
-import { formatCompactCurrency, roundMoney } from '../../../core/util/money';
+import { formatCompactCurrency, netValue, roundMoney } from '../../../core/util/money';
 import type { ApprovalRequest } from '../../../mcp/tooling/approval-gate';
 import { defineTool, type ToolContext } from '../../../mcp/tooling/define-tool';
+import { ToolInputError } from '../../../mcp/tooling/tool-errors';
 import { UndoNotifier } from '../../history/undo-notifier';
 import type { StageUpdate } from '../data/with-deals';
 import { assessDiscount, assessStageMoves, discountImpact } from './risk-policy';
@@ -24,6 +27,7 @@ export interface DealMutationStore {
   clearFilter(): void;
   applyDiscount(dealIds: readonly string[], discountPct: number): MutationResult<number>;
   moveStages(updates: readonly StageUpdate[]): MutationResult<DealStage>;
+  terminateContract(dealId: string): MutationResult<ContractStatus>;
   recordSnapshot(label: string): string;
   undoTo(id: string): HistoryEntry | null;
 }
@@ -64,6 +68,11 @@ interface FilterArgs {
 interface DiscountArgs {
   dealIds: string[];
   discountPct: number;
+  reason: string;
+}
+
+interface TerminateArgs {
+  dealId: string;
   reason: string;
 }
 
@@ -145,6 +154,14 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
               `Set a ${discountPct}% discount on ${plural(ids.length, 'deal')} ` +
               `(${formatCompactCurrency(assessment.revenueImpact)} revenue)`,
             reason,
+            policy: assessment.flags,
+            diff: assessment.changes.map((change) => ({
+              label: `${change.account} (${change.id})`,
+              field: 'Discount',
+              before: `${change.before}%`,
+              after: `${change.after}%`,
+              note: formatCompactCurrency(change.impact),
+            })),
             details: { policy: assessment.flags, changes: assessment.changes },
           };
     },
@@ -209,6 +226,14 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
             risk: 'high',
             summary: `Mark ${plural(assessment.flaggedDeals.length, 'large deal')} as closed-lost`,
             reason,
+            policy: assessment.flags,
+            diff: assessment.flaggedDeals.map((deal) => ({
+              label: `${deal.account} (${deal.id})`,
+              field: 'Stage',
+              before: DEAL_STAGE_LABELS[store.entityMap()[deal.id]?.stage ?? 'closed-lost'],
+              after: DEAL_STAGE_LABELS['closed-lost'],
+              note: `${formatCompactCurrency(deal.netValue)} net value`,
+            })),
             details: { policy: assessment.flags, deals: assessment.flaggedDeals },
           };
     },
@@ -227,7 +252,63 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
     },
   });
 
-  return [setDealFilter, applyBatchDiscount, updateDealStages];
+  const terminateContract = defineTool<TerminateArgs, UndoNotifier>({
+    name: 'terminateContract',
+    title: 'Terminate contract',
+    description:
+      'Use only when the user explicitly asks to end a customer contract. Works on closed-won ' +
+      'deals with an active contract. This is irreversible for the agent and ALWAYS needs human ' +
+      'approval: the human may reject, then nothing changes and you get status ' +
+      '"rejected_by_human" with their note. Needs an exact ID from searchDeals.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['dealId', 'reason'],
+      properties: { dealId: DEAL_ID, reason: REASON },
+    },
+    annotations: { consequentialHint: true },
+    deps: () => inject(UndoNotifier),
+    risk: ({ dealId, reason }): ApprovalRequest => {
+      const deal = store.entityMap()[dealId];
+      if (!deal) {
+        throw new ToolInputError(`Unknown deal ${dealId}. Use searchDeals to find valid deal IDs.`);
+      }
+      const policy = ['Terminating a contract always needs a human decision'];
+      return {
+        toolName: 'terminateContract',
+        risk: 'critical',
+        summary: `Terminate the contract with ${deal.account} (${deal.id})`,
+        reason,
+        policy,
+        diff: [
+          {
+            label: `${deal.account} (${deal.id})`,
+            field: 'Contract',
+            before: deal.contractStatus,
+            after: 'terminated',
+            note: `${formatCompactCurrency(netValue(deal))} net value`,
+          },
+        ],
+        details: { policy, contact: deal.contactEmail },
+      };
+    },
+    snapshot: store,
+    snapshotLabel: ({ dealId }) => `Terminate contract ${dealId}`,
+    run: ({ dealId }, ctx, notifier) => {
+      const { changed, skipped } = store.terminateContract(dealId);
+      if (changed.length > 0) {
+        notifier.announce(`Agent terminated the contract for ${dealId}`, undoer(ctx));
+      }
+      return {
+        status: outcome(changed.length, skipped.length),
+        dealId,
+        terminatedAt: changed.length > 0 ? ctx.now().toISOString() : null,
+        skipped,
+      };
+    },
+  });
+
+  return [setDealFilter, applyBatchDiscount, updateDealStages, terminateContract];
 }
 
 function lastPerDeal(updates: readonly StageUpdate[]): StageUpdate[] {

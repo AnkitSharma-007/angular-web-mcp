@@ -67,11 +67,12 @@ describe('deal mutation tools', () => {
   describe('registration', () => {
     beforeEach(() => setup(false));
 
-    it('registers three tools with strict schemas and the right hints', () => {
+    it('registers four tools with strict schemas and the right hints', () => {
       const tools = registry.current.getTools();
       expect(tools.map((tool) => tool.name)).toEqual([
         'applyBatchDiscount',
         'setDealFilter',
+        'terminateContract',
         'updateDealStages',
       ]);
       for (const tool of tools) {
@@ -79,7 +80,11 @@ describe('deal mutation tools', () => {
         expect(tool.description.length).toBeGreaterThan(80);
       }
       const hinted = tools.filter((tool) => tool.annotations?.['consequentialHint'] === true);
-      expect(hinted.map((tool) => tool.name)).toEqual(['applyBatchDiscount', 'updateDealStages']);
+      expect(hinted.map((tool) => tool.name)).toEqual([
+        'applyBatchDiscount',
+        'terminateContract',
+        'updateDealStages',
+      ]);
     });
 
     it('requires a reason of 3-200 characters on every mutation', async () => {

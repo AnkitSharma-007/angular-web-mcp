@@ -1,5 +1,7 @@
 import { provideExperimentalWebMcpTools } from '@angular/core';
 import type { Routes } from '@angular/router';
+import { ApprovalService } from './features/approvals/approval-service';
+import { HUMAN_APPROVAL_GATE } from './mcp/tooling/approval-gate';
 import { DEAL_CONTEXT_TOOLS } from './features/dashboard/tools/deal-context-tools';
 import { DashboardUiStore } from './features/dashboard/data/dashboard-ui-store';
 import { DealsStore } from './features/dashboard/data/deals-store';
@@ -8,7 +10,12 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   {
     path: 'dashboard',
-    providers: [DealsStore, DashboardUiStore, provideExperimentalWebMcpTools(DEAL_CONTEXT_TOOLS)],
+    providers: [
+      DealsStore,
+      DashboardUiStore,
+      { provide: HUMAN_APPROVAL_GATE, useExisting: ApprovalService },
+      provideExperimentalWebMcpTools(DEAL_CONTEXT_TOOLS),
+    ],
     loadComponent: () =>
       import('./features/dashboard/dashboard-shell').then((m) => m.DashboardShell),
     children: [

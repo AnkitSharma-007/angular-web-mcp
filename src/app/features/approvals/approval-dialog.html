@@ -1,0 +1,88 @@
+<h2 mat-dialog-title class="flex items-center gap-2">
+  <mat-icon [class.text-error]="critical" aria-hidden="true">
+    {{ critical ? 'gpp_maybe' : 'warning' }}
+  </mat-icon>
+  <span>Approval needed</span>
+  <span
+    class="ml-auto rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium"
+    data-testid="risk-badge"
+    [class.text-error]="critical"
+    [class.text-on-surface-variant]="!critical"
+  >
+    {{ riskLabel }}
+  </span>
+</h2>
+
+<mat-dialog-content class="flex flex-col gap-4">
+  <p class="m-0 text-base text-on-surface" data-testid="summary">{{ request.summary }}</p>
+
+  @if (request.reason) {
+    <section aria-label="Agent's reason">
+      <h3 class="m-0 mb-1 text-sm font-semibold text-on-surface-variant">Agent's reason</h3>
+      <p class="m-0 text-sm text-on-surface" data-testid="reason">{{ request.reason }}</p>
+    </section>
+  }
+
+  @if (request.policy?.length) {
+    <section aria-label="Policy flags">
+      <h3 class="m-0 mb-1 text-sm font-semibold text-on-surface-variant">Why this needs you</h3>
+      <ul class="m-0 pl-5 text-sm text-on-surface" data-testid="policy">
+        @for (flag of request.policy; track flag) {
+          <li>{{ flag }}</li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (request.diff?.length) {
+    <section aria-label="Proposed changes" class="overflow-x-auto">
+      <table class="w-full border-collapse text-left text-sm" data-testid="diff">
+        <caption class="sr-only">
+          Proposed changes
+        </caption>
+        <thead>
+          <tr class="text-on-surface-variant">
+            <th scope="col" class="py-1 pr-3 font-medium">Deal</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Field</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Before</th>
+            <th scope="col" class="py-1 pr-3 font-medium">After</th>
+            @if (hasDiffNotes()) {
+              <th scope="col" class="py-1 font-medium">Impact</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of request.diff; track $index) {
+            <tr class="border-t border-outline-variant" data-testid="diff-row">
+              <th scope="row" class="py-1 pr-3 font-medium text-on-surface">{{ row.label }}</th>
+              <td class="py-1 pr-3">{{ row.field }}</td>
+              <td class="py-1 pr-3">{{ row.before }}</td>
+              <td class="py-1 pr-3 font-medium text-on-surface">{{ row.after }}</td>
+              @if (hasDiffNotes()) {
+                <td class="py-1">{{ row.note }}</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Note to the agent (optional)</mat-label>
+    <textarea matInput rows="2" [formField]="noteForm.note"></textarea>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-stroked-button
+    type="button"
+    data-testid="reject"
+    [attr.cdkFocusInitial]="critical ? '' : null"
+    (click)="reject()"
+  >
+    Reject
+  </button>
+  <button mat-flat-button type="button" data-testid="approve" (click)="approve()">Approve</button>
+</mat-dialog-actions>
