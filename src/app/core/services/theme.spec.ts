@@ -8,12 +8,12 @@ describe('ThemeService', () => {
     document.documentElement.classList.remove('dark');
   });
 
-  it('defaults to dark and applies the root class', () => {
+  it('defaults to light and leaves the root class off', () => {
     const theme = TestBed.inject(ThemeService);
     TestBed.tick();
-    expect(theme.mode()).toBe('dark');
-    expect(theme.isDark()).toBe(true);
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(theme.mode()).toBe('light');
+    expect(theme.isDark()).toBe(false);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
   it('toggle flips the html class after a tick', () => {
@@ -21,31 +21,31 @@ describe('ThemeService', () => {
     TestBed.tick();
     theme.toggle();
     TestBed.tick();
-    expect(theme.mode()).toBe('light');
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
-    theme.toggle();
-    TestBed.tick();
     expect(theme.mode()).toBe('dark');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+    theme.toggle();
+    TestBed.tick();
+    expect(theme.mode()).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
   it('persists the mode and restores it in a fresh instance', () => {
-    TestBed.inject(ThemeService).setMode('light');
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+    TestBed.inject(ThemeService).setMode('dark');
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
 
     TestBed.resetTestingModule();
     const restored = TestBed.inject(ThemeService);
     TestBed.tick();
-    expect(restored.mode()).toBe('light');
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(restored.mode()).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
   it('ignores an unrecognised stored value', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
-    expect(TestBed.inject(ThemeService).mode()).toBe('dark');
+    expect(TestBed.inject(ThemeService).mode()).toBe('light');
   });
 
-  it('falls back to dark when localStorage throws', () => {
+  it('falls back to light when localStorage throws', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
@@ -53,8 +53,8 @@ describe('ThemeService', () => {
       throw new Error('denied');
     });
     const theme = TestBed.inject(ThemeService);
-    expect(theme.mode()).toBe('dark');
-    expect(() => theme.setMode('light')).not.toThrow();
     expect(theme.mode()).toBe('light');
+    expect(() => theme.setMode('dark')).not.toThrow();
+    expect(theme.mode()).toBe('dark');
   });
 });

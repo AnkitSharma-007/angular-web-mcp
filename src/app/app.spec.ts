@@ -53,7 +53,7 @@ describe('App', () => {
     const { root } = await render();
     expect(root.querySelector('mat-toolbar')?.classList.contains('glass')).toBe(true);
     expect(root.querySelector('button[aria-label^="Switch to"]')?.getAttribute('aria-label')).toBe(
-      'Switch to light theme',
+      'Switch to dark theme',
     );
   });
 
@@ -62,9 +62,9 @@ describe('App', () => {
     const button = root.querySelector<HTMLButtonElement>('button[aria-label^="Switch to"]');
     button?.click();
     await fixture.whenStable();
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
-    expect(button?.getAttribute('aria-label')).toBe('Switch to dark theme');
-    expect(localStorage.getItem('awm.theme')).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(button?.getAttribute('aria-label')).toBe('Switch to light theme');
+    expect(localStorage.getItem('awm.theme')).toBe('dark');
   });
 
   it('shows the registry kind chip', async () => {

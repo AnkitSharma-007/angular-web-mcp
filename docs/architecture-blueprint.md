@@ -718,7 +718,7 @@ interface ActEval {
 
 - **Files:** `testing/a11y.ts`, `theme.spec.ts`, `glass-card.spec.ts`, plus extensions to `app.spec.ts`.
 - **Scenarios:**
-  - **Theme:** dark by default; `toggle` flips the `<html>` class after `TestBed.tick()`; the mode persists and restores; a throwing `localStorage` falls back to the default.
+  - **Theme:** light by default; `toggle` flips the `<html>` class after `TestBed.tick()`; the mode persists and restores; a throwing `localStorage` falls back to the default.
   - **GlassCard:** projection, the title, and each accent class.
   - **Shell:** axe-clean.
 
@@ -1058,7 +1058,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - `src/app/app.ts`: `App` shell. A glass `mat-toolbar` inside `<header>`, an `<h1>`, a theme toggle button, and `<main>` containing `<router-outlet />`. It injects `ThemeService` as `protected readonly theme`.
   - `src/app/app.config.ts`: `appConfig` with `provideBrowserGlobalErrorListeners()`, `provideRouter(routes, withAutoCleanupInjectors(), withComponentInputBinding())`, and `MAT_ICON_DEFAULT_OPTIONS = { fontSet: 'material-symbols-outlined' }`. Session 3 adds routes, and later sessions append providers here.
   - `src/app/app.routes.ts`: `routes: Routes = []`. Session 3 fills it.
-  - `src/app/core/services/theme.ts`: `ThemeService` (`@Service()`), `type ThemeMode = 'light' | 'dark'`, `THEME_STORAGE_KEY = 'awm.theme'`. Members: `mode` (readonly signal), `isDark` (computed), `setMode(mode)` (also persists), `toggle()`. An `effect` toggles `.dark` on `document.documentElement`. Default is dark.
+  - `src/app/core/services/theme.ts`: `ThemeService` (`@Service()`), `type ThemeMode = 'light' | 'dark'`, `THEME_STORAGE_KEY = 'awm.theme'`. Members: `mode` (readonly signal), `isDark` (computed), `setMode(mode)` (also persists), `toggle()`. An `effect` toggles `.dark` on `document.documentElement`. Default is light.
   - `src/app/shared/ui/glass-card/glass-card.ts`: `GlassCard` (`<app-glass-card>`) and `type GlassCardAccent = 'primary' | 'warn' | 'success'`. Inputs: `title` (default `''`, renders an `<h2>` only when non-empty) and `accent` (default `'primary'`). Content is projected.
   - `src/testing/a11y.ts`: `expectNoA11yViolations(root: Element = document.body): Promise<void>`. It runs axe-core with `color-contrast` disabled (jsdom can't compute it) and throws an `Error` listing `rule-id: help (selectors)`.
   - `src/test-setup.ts`: replaces `globalThis.fetch` with a function that **synchronously throws** `Unexpected network call: fetch is disabled in unit tests`.
@@ -1082,8 +1082,8 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Zoneless timing:** use `await fixture.whenStable()` after DOM events. For root-service effects (such as `ThemeService`), call `TestBed.tick()`. Reset the global state that tests touch: `localStorage.clear()` and remove the `dark` class from `documentElement` in `afterEach`.
   - **`GlassCard.title` is a native HTML attribute name.** The host binding `'[attr.title]': 'null'` removes it, so the card doesn't show a tooltip. Keep it if you add inputs with native names.
   - **Tailwind dynamic classes:** Tailwind scans source files for full class strings, so keep class names as complete literals (as in the `ACCENT_CLASSES` map) and never build them with string concatenation. Arbitrary properties such as `[--mat-toolbar-container-background-color:transparent]` work in templates and are used to un-paint `mat-toolbar` under `.glass`.
-  - **Fonts:** Inter and Material Symbols are loaded as global CSS entries in `angular.json` `styles` (from `node_modules`), and the build hashes the woff2 files into `media/`. Icons use `<mat-icon>name</mat-icon>`, and `MAT_ICON_DEFAULT_OPTIONS` selects the `material-symbols-outlined` font set, so tests that render `mat-icon` don't need extra setup. The Symbols font is about 4 MB, but it is not counted in the JS/CSS budgets.
-  - **`index.html`** has `<html class="dark">` so the default theme doesn't flash. `ThemeService` takes over once it is constructed. A user who stored `light` sees a brief dark flash, because an inline script would break the planned CSP.
+  - **Fonts:** Inter is loaded from `node_modules` and Material Symbols from `src/material-symbols/outlined-subset.css`, both as global CSS entries in `angular.json` `styles`, and the build hashes the woff2 files into `media/`. Icons use `<mat-icon>name</mat-icon>`, and `MAT_ICON_DEFAULT_OPTIONS` selects the `material-symbols-outlined` font set, so tests that render `mat-icon` don't need extra setup. The Symbols font is a 24 kB subset of the icons used in templates (the full font is 4 MB). After adding an icon, run `npm run icons:subset` (needs `pip install fonttools brotli`); `npm run icons:check` fails if a template icon is missing.
+  - **`index.html`** has no `dark` class, so the default light theme doesn't flash. `ThemeService` takes over once it is constructed. A user who stored `dark` sees a brief light flash, because an inline script would break the planned CSP.
   - **`app.ts`** keeps `title` as a plain `protected readonly` string, not a signal, because it is a constant.
   - **Prettier:** `.prettierrc` has `printWidth: 100` and `singleQuote`. `.github/workflows/ci.yml` uses block YAML, since Prettier can't parse the blueprint's flow-style `${{ }}` snippet.
   - **Blueprint deviation (non-functional):** to keep each commit green under the 60% gate, commit 1.2 shipped small smoke tests for `ThemeService` (via the `App` toggle test) and `GlassCard`. Commit 1.3 expanded them into the full scenarios.
