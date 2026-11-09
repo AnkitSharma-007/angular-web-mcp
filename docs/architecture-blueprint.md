@@ -1523,3 +1523,84 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - `src/testing/fake-genai.ts` was created in 8.1 (the blueprint lists it under 8.3) because the settings store specs needed `models.list`.
 - **Ready for Session 9:**
   - **Agent Console & Lab.** It starts with 9.1 in the Session 9 block of this file. The console should read `AgentSessionStore` (`transcript`, `status`, `run`, `stop`, `lastUsage`, `lastCostUsd`), use `ApiKeyDialogLauncher.open()` for the `auth` error card, `SettingsStore.setModel` for the `model-access` fix, and `LayoutStore` for the hotkeys.
+
+## Handoff Note: Session 9 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/features/agent-console/demo-prompts.ts`: `ActId` (`'act1'…'act4'`), `PromptHotkey`, `DemoPrompt {id, hotkey, label, prompt, model}`, `DEMO_PROMPTS` (Act 1 on the Sprinter, Acts 2–4 on the Operator), `demoPromptForKey(key)` and `demoPromptFor(id)` (throws on an unknown act).
+  - `src/app/features/agent-console/presenter-actions.ts`: `PresenterActions` (`@Service()`, root).
+    - Signal `draft: PromptDraft | null` (`{text, model, nonce}`).
+    - `fillChip(key): boolean` fills the draft and calls `LayoutStore.openConsole()`. It does **not** run the prompt.
+    - `registerReset(handler): () => void`.
+    - `reset()` runs `AgentSessionStore.clear()`, `WireTelemetryStore.clear()`, clears the draft, then runs the handlers.
+    - `handleKey(event): boolean`: `` ` `` toggles the inspector, `1`–`4` fill a chip, `Shift+R` resets. It is ignored for ctrl/meta/alt, an already-prevented event, and typing targets (`isTypingTarget`: input/textarea/select/`contenteditable`).
+  - `src/app/app.ts`: `host: { '(window:keydown)': 'onKeydown($event)' }` calls `presenter.handleKey`.
+  - `src/app/features/agent-console/agent-console.ts` / `.html`: `AgentConsole` (`<app-agent-console />`).
+    - It is rendered by `DashboardShell` when `LayoutStore.consoleOpen()`, below the router outlet, so it is also available on the Lab page. The shell nav has a `toggle-console` button (`aria-pressed`).
+    - `data-testid`: `agent-console`, `model-badge` (`data-model`), `status` (`data-status`), `clear`, `close`, `key-required`, `add-key`, `chip-act1…chip-act4`, `transcript` (`role="log"`), `prompt` (Signal Forms textarea), `send`, `stop`.
+  - `src/app/features/agent-console/transcript-item.ts` / `.html`: `TranscriptItem` (`entry` input, `fix` output of `ErrorFix = 'open-key-dialog' | 'use-default-model'`).
+    - `data-testid`: `user-message`, `thought` (a collapsed `<details>`), `agent-text`, `tool-call`, `tool-result` (`data-ok`), `tools-changed`, `awaiting-approval`, `error-card` (`data-kind`), `error-message`, `error-fix`, `done`.
+  - `src/app/features/layout/layout-store.ts`: new `openConsole()`, state `inspectorRunId: string | null` and `showRun(runId | null)`, which opens the inspector and sets the run filter (`null` clears the filter and leaves the inspector as it is). **Session 10's inspector should read `inspectorOpen` and `inspectorRunId`.**
+  - `src/app/core/store-features/with-state-snapshot.ts`: `withStateSnapshot()` adds `snapshotState()` (deep copy of the whole state, history included) and `restoreState(snapshot)`. It is applied to `DealsStore`, `ProposalsStore` and `DashboardUiStore`.
+  - `ProposalsStore.clearDrafts()`.
+  - `WireTelemetryStore.setActiveRun(runId | null)`: while set, `begin()` tags every packet with that `runId` unless the caller passes one. This covers `mcp`, `hitl` and `llm` packets, which closes the gap noted in Session 8.
+  - `SettingsStore.canUseAgent`: computed, true unless `keyStatus` is `missing` or `invalid`. Console, race and evals share it.
+  - `src/app/features/lab/isolated-run.ts`: `IsolatedRunner` (**`@Service({ autoProvided: false })`**, listed in the `dashboard` route `providers` in `app.routes.ts`).
+    - `run({prompt, model, approvals?, runId?, signal?, maxSteps?}): Promise<RunOutcome>`. It never rejects for an agent error: the error is in `outcome.error`.
+    - `beginBatch(): () => void`, `evalMode` (computed) and `activeRunId`.
+    - `RunOutcome {runId, prompt, model, events, text, toolCalls[{callId,name,args,ok,result,latencyMs}], decisions[{toolName,approved,scripted,callsBefore}], error, stopped, usage, costUsd, ms, deals: DealsView, proposals: ProposalsView}`.
+    - Also exports `ScriptedDecision`, `IsolatedRunOptions`, `ToolCallRecord`, `DecisionRecord`, `RunFailure`.
+  - `src/app/features/lab/act-evals.ts`:
+    - `ACT_EVALS: ActEval[]` (4 acts, each with the stage prompt plus 2 paraphrases), `findActEval(id)` and `NON_MUTATING_TOOLS`.
+    - `scoreRun(spec, outcome): {passed, failures, selfCorrected}`.
+    - `EvalRun`, `toEvalRun`, `failedEvalRun`, `ActSummary`, `summarize(actId, runs)`.
+    - `toEvalLogRow(summary, {date, change, before?})` and `exportEvalJson(summaries, runs, at)`.
+  - `src/app/features/lab/model-race.ts`: `ModelRaceStore` (component-scoped `signalStore`).
+    - State: `selected`, `entries: RaceEntry[]` (`{model, status: 'queued' | 'running' | 'done' | 'failed', outcome, error}`) and `running`.
+    - Computed: `selectedModels` (catalog order), `estimatedCostUsd` and `canRun`.
+    - Methods: `toggleModel(id)`, `run(prompt)` and `stop()`.
+    - Also `DEFAULT_RACE_MODELS`, `DEFAULT_RACE_PROMPT` and `RACE_ESTIMATE_USAGE` (9000 in / 800 out / 1500 thinking, an untuned guess).
+  - `src/app/features/lab/eval-session.ts`: `EvalSessionStore` (component-scoped).
+    - State: `selectedActs`, `runsPerAct` (`5 | 10`, `RUNS_PER_ACT_OPTIONS`), `runs`, `before`, `running` and `progress`.
+    - Computed: `rows: EvalRow[]` (`{summary, label, before, failures}`), `estimatedCostUsd` and `canRun`.
+    - Methods: `toggleAct`, `setRunsPerAct`, `run()`, `stop()`, `clear()`, `exportJson()` and `logRows(change)`.
+  - `src/app/features/lab/lab-page.ts`: `LabPage` provides both stores. It composes `RacePanel` and `EvalPanel`, an `eval-banner` (`role="status"`) while `runner.evalMode()`, and a `key-required` notice.
+    - Race `data-testid`: `race-model-<id>`, `race-prompt`, `race-run`, `race-stop`, `race-estimate`, `race-card-<id>` (`data-status`), `race-ms`, `race-calls`, `race-thinking`, `race-cost`, `race-answer`, `race-error`, `paid-badge`.
+    - Eval `data-testid`: `eval-act-<id>`, `eval-runs-5|10`, `eval-run`, `eval-stop`, `eval-estimate`, `eval-progress`, `eval-table`, `eval-row-<id>`, `eval-pass`, `eval-p90`, `eval-self-correction`, `eval-failures-<id>`, `eval-inspect`, `eval-change`, `eval-log-rows`, `eval-log-output`, `eval-copy`, `eval-export`, `eval-clear`.
+  - `src/app/features/lab/download-text.ts`: `downloadText(filename, text, type?)` and `copyText(text): Promise<boolean>`.
+  - `src/testing/run-outcomes.ts`: `makeOutcome`, `passingOutcome(actId)`, `seedDealsView`, `act2FinalDeals`, `act4FinalDeals`, `calls`, `toolCall`, `decision`, `makeDraft`. These are useful for Session 10's acceptance work.
+  - `docs/eval-log.md`: header only.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` and `npm run build` pass on each of the 4 commits (9.1, 9.2, 9.3 and a follow-up fix). The final run has 857 tests; statements 98.98 %, branches 96.12 %, functions 98.01 %, lines 99.12 %. Between 9.2 and 9.3 coverage was 84 % (all the lab specs are in 9.3).
+  - **Not verified in a real browser or against the live API.** The console layout, the transcript scrolling, hotkeys on a real keyboard, the lab cards and the whole eval loop were exercised only in jsdom with fakes. Before the talk, run `npm start` with a real key and: (1) press `1`–`4`, `` ` `` and `Shift+R`; (2) run a race and a 5-run sweep; (3) confirm that the Act 4 approvals really are auto-decided and the dashboard really is restored.
+  - **Bundle (warning only):** the initial total is 654.13 kB (was 636.34 kB). `App` now injects `PresenterActions`, so `AgentSessionStore` and `IsolatedRunner` are in the initial chunk. `@google/genai` (410 kB) and `GeminiAgent` (8.31 kB) are still lazy chunks, and the lab is a 28.31 kB lazy chunk.
+  - **The console is usable while the key is `checking` or `unreachable`.** Only `missing` and `invalid` disable it (`canUseAgent`). A flaky key check on stage then shows a normal error card instead of a dead input.
+  - **The console is locked while `IsolatedRunner.evalMode()`** (a lab run or batch is in progress), and its Run/Send buttons are locked while `AgentSessionStore.running()`.
+  - **Chip click runs, hotkey only fills.** A chip click runs the prompt immediately with the chip's model and sets the console model badge. A hotkey fills the textarea and the badge, so the presenter presses Enter. The badge follows `draft.model ?? settings.model()` and `Shift+R` returns it to the saved model.
+  - **`Shift+R` resets everything:** the agent session, the wire telemetry, the draft and, through the handler `DashboardShell` registers, `DealsStore.reset()` + `clearHistory()`, `ProposalsStore.clearDrafts()`, `closeProposal()` and `selectDeal(null)`. Leaving `/dashboard` unregisters the handler. Session 10's reset scenario can call `PresenterActions.reset()`.
+  - **Scopes:** `IsolatedRunner` lives in the `dashboard` route injector. `ModelRaceStore` and `EvalSessionStore` are provided by `LabPage` itself (keeping them out of the eager `app.routes.ts` bundle), so leaving `/dashboard/lab` discards race cards and eval results. Export JSON or build the log rows before navigating away.
+  - **Isolation mechanism:** `IsolatedRunner` takes `snapshotState()` of `DealsStore` (history included), `ProposalsStore` and `DashboardUiStore`, runs the agent, builds `deals`/`proposals` views **before** restoring, then calls `restoreState()` in a `finally` together with `setAutoDecider(null)` and `setActiveRun(null)`. Runs are serialized through a promise chain, which is why the race is **sequential**, not parallel, and why latencies are comparable. `evalMode` is true for queued runs and for `beginBatch()` holders, so it does not flicker between runs of a series.
+  - **Scripted approvals:** the decider shifts the next `'approve' | 'reject'`. An unscripted request is rejected with the note `'no scripted decision'`. Race runs pass no script, so any approval in a race is declined. Keep race prompts read-only.
+  - **Scoring semantics (`scoreRun`):**
+    - The required tools must be an ordered subsequence of the tool-call names.
+    - Any call outside `requiredSequence` and `forbidden` is an "extra": under `'read-only'` it must be in `NON_MUTATING_TOOLS` (`getPipelineSummary`, `searchDeals`, `getDealDetails`, `setDealFilter`, `openProposalDrawer`), and under `'none'` it always fails.
+    - Retrying a tool after its approval was rejected fails (uses `decision.callsBefore`).
+    - An agent `error`, a stop, or a failed `assertState` also fails the run.
+    - `selfCorrected` means at least one tool result was `ok: false` and the run still passed. `summarize().selfCorrectionRate` is the share of runs with a failed call that passed (`null` when none had one).
+    - Act 2's check derives its targets from `createSeedDeals()`: EMEA + `negotiation`, discount exactly 10 %, `closed-won` only when the seed probability is above 70, and nothing else changed.
+    - Act 3 accepts `…-12-01` or `…-01-01` as the start date (the billing-date rule rules out mid-month).
+    - Act 4 requires the Arcadia Bank discount at 25 % and the Monsoon Retail contract still `active`, so the model must call `applyBatchDiscount` before `terminateContract` (approve, then reject).
+  - **Eval series rules:** the prompts cycle through `spec.prompts` (`index % prompts.length`). An `auth` or `model-access` error stops the whole series. A `quota` error does not. Stop discards the run in flight. A re-run replaces only the re-run acts' results and keeps their previous `passes/runs` as `before` for the log row. A run that rejects is recorded with the id `<act>-<n>`.
+  - **Run ids:** the runner uses `run-<n>` (counted per runner instance) unless one is given, so ids restart on reload. That is fine because packets are in memory only.
+  - **Cost estimates are guesses** (`RACE_ESTIMATE_USAGE`). Compare them with the real `costUsd` after the first sweeps and adjust.
+  - **Testing tips:**
+    - Fake runner shape for stores and the page: `{ run: vi.fn(handler), beginBatch: () => release, evalMode: signal(false) }`, provided as `{provide: IsolatedRunner, useValue}`. `agent-console.spec.ts` needs the same fake (the console injects the runner for the lock).
+    - For specs that go through `injectAsync` of the agent, add `beforeAll(() => import('…/gemini-agent'))`. The first dynamic import is slow, and a plain `settle()` would flake without it. `{provide: GeminiAgent, useValue: {run}}` works.
+    - Real stores plus a fake agent is enough for isolation specs (see `isolated-run.spec.ts`). No registry is needed, because `declareExperimentalWebMcpTool` returns silently without one.
+    - Stub `URL.createObjectURL` and `HTMLAnchorElement.prototype.click` for downloads, and `vi.stubGlobal('navigator', {clipboard})` for copy. Call `vi.unstubAllGlobals()` in `afterEach`.
+  - **Blueprint deviations (non-functional):**
+    - Added `PresenterActions`, `withStateSnapshot`, `eval-session.ts`, `race-panel`, `eval-panel`, `download-text.ts`, `testing/run-outcomes.ts` and `SettingsStore.canUseAgent`.
+    - The race prompt and the log "change" text live in the panels (Signal Forms) and are passed into `run(prompt)` / `logRows(change)`.
+    - `Shift+R` also empties the telemetry (Session 10.2 asks for it), and was added in a small `fix(console)` commit after 9.3.
+- **Ready for Session 10:**
+  - **Inspector, Act Acceptance & Docs.** It starts with 10.1 in the Session 10 block of this file. The inspector should open from `LayoutStore.inspectorOpen` (the `` ` `` hotkey already toggles it) and filter its packet list by `LayoutStore.inspectorRunId` (set by the Lab's "Packets" buttons). 10.2 can reuse `ACT_EVALS`/`scoreRun` and `FakeGenAI` scripts, plus `PresenterActions.reset()` for the reset scenario.
