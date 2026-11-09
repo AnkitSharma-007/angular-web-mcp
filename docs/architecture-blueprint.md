@@ -1173,3 +1173,53 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Blueprint deviation (non-functional):** to keep commit 2.2 above the coverage gate, it shipped smoke specs (`with-deals.spec.ts`, `deals-store.spec.ts`). Commit 2.3 replaced them with the full scenarios and added `with-agent-history.spec.ts` against a minimal store. I also added `core/models/mutation-result.ts` and `features/dashboard/data/deal-analytics.ts` (pure helpers), which the blueprint doesn't list.
 - **Ready for Session 3:**
   - **Dashboard Views.** It starts with 3.1: `feat(dashboard): add route shell, KPI strip and Material deals table with debounced search`. Fill `app.routes.ts` and provide `DealsStore` in the `/dashboard` route `providers`.
+
+## Handoff Note: Session 3 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/app.routes.ts`: `routes`.
+    - `''` redirects to `dashboard`. `**` redirects to `dashboard`.
+    - `dashboard` has `providers: [DealsStore, DashboardUiStore]`, lazy `DashboardShell`, and children `''` (`DashboardPage`) and `lab` (`LabPage`).
+    - `about` is lazy `AboutPage`, outside the dashboard injector (D12).
+    - **`ProposalsStore` is not in the providers yet.** It doesn't exist until Session 7, so add it there. Session 4 adds `provideExperimentalWebMcpTools(...)` to the same `dashboard` `providers` array.
+  - `src/app/app.ts` / `app.html`: the toolbar has a `<nav aria-label="Primary">` with Dashboard and About links. Active state comes from `isActive()` signals (`dashboardActive` with `subset`, `aboutActive` with `exact`) and sets `aria-current="page"`. Session 4's registry chip goes into this toolbar.
+  - `src/app/features/layout/layout-store.ts`: `LayoutStore` (`providedIn: 'root'`) with `consoleOpen`, `inspectorOpen`, `toggleConsole()`, `toggleInspector()`. Nothing consumes it yet (Session 9 and 10).
+  - `src/app/features/dashboard/data/dashboard-ui-store.ts`: `DashboardUiStore`. It is route-scoped and injects `DealsStore`.
+    - State: `proposalOpen`.
+    - Linked state: `selectedDealId: string | null`, a `linkedSignal` over `DealsStore.filteredDeals`. It resets to `null` when the selected deal leaves the filtered list and is kept otherwise.
+    - Methods: `selectDeal(id | null)`, `openProposal()`, `closeProposal()`. Session 7's `openProposalDrawer` tool should call `openProposal()`.
+  - `src/app/features/dashboard/dashboard-shell.ts`: `DashboardShell` has an Overview/Lab sub-nav (`isActive`, with `exact` for overview) and a `<router-outlet />`.
+  - `src/app/features/dashboard/dashboard-page.ts`: `DashboardPage` stacks `<app-metrics-strip />`, `<app-pipeline-chart />` and `<app-deals-table />`. Session 7 will add the proposal drawer here, inside `@if (ui.proposalOpen())`.
+  - `src/app/features/dashboard/metrics-strip/metrics-strip.ts`: `MetricsStrip`. Five `StatTile`s from `store.kpis()` in an `aria-live="polite"` section.
+  - `src/app/features/dashboard/pipeline-chart/pipeline-chart.ts`: `PipelineChart` and `StageBar {key, label, fill, x, width, count, netValue, pct}`.
+    - It draws one `<rect data-stage="…">` per stage, with `x` and `width` as SVG **attributes** in a `0 0 100 10` viewBox. Width equals the stage's `pct`.
+    - It is `role="img"` with a computed `aria-label`, has a legend, a region mini-row (`ul[aria-label="Net value by region"]`), and an sr-only `table` that mirrors the bars.
+    - It shows an empty state, with no svg, when every `netValue` is 0.
+  - `src/app/features/dashboard/deals-table/deals-table.ts`: `DealsTable`, `FLASH_DURATION_MS` (2000), `SEARCH_DEBOUNCE_MS` (250).
+    - It uses `MatTable`, `MatSort` and `[trackBy]` by deal id. Rows carry `data-deal-id`, `row-flash` (changed in the last 2 s), `row-selected` and `aria-current`. A row click or Enter calls `ui.selectDeal`.
+    - The search box is a Signal Form: `form(linkedSignal(() => ({ query: store.filter().query })))` bound with `[formField]`. `debounced(…, 250)` feeds `store.setFilter({ query })` through an `effect`. A query set elsewhere (for example by the agent's `setDealFilter`) flows into the input through the `linkedSignal`.
+    - The chips are removable and show only the active `stages`, `regions` and `minValue`. There is a "Clear filters" button.
+  - `src/app/features/dashboard/deals-table/sort-deals.ts`: `sortDeals(deals, sort)`. It sorts by net value (not list value) and by stage order, breaks ties by id, and doesn't mutate its input.
+  - `src/app/features/lab/lab-page.ts` is a placeholder. `src/app/features/about/about-page.ts` is final copy.
+  - `src/app/shared/ui/stat-tile/stat-tile.ts`: `StatTile` (`<app-stat-tile label value hint accent />`) wraps `GlassCard`.
+  - `src/tailwind.css` new utilities:
+    - `row-flash` (2 s keyframes, with a static tint under `prefers-reduced-motion`)
+    - `row-selected`
+    - `chart-rect` (transitions `x` and `width`)
+    - `chart-bar` (transitions `width`)
+    - Both transitions are disabled under reduced motion.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (183 tests; statements 97.4 %, branches 99.1 %, functions 94.3 %, lines 97.0 %) and `npm run build` all pass on each of the 3 commits. The visual look (chart, flash, glass table) was **not checked in a real browser**, so run `npm start` when convenient. `main` is about 223 kB raw and the lazy `dashboard-page` chunk is about 245 kB (mostly Material table, sort, chips and form-field).
+  - **No trailers**, as before. Verified with `git log -1 --format='%an <%ae>%n%(trailers)'`.
+  - **Fake timers and `whenStable()`:** `debounced()` registers a pending task while its timer runs, so `fixture.whenStable()` never resolves under `vi.useFakeTimers()` until the timer is advanced. In `deals-table.spec.ts`, `setup(true)` calls `fixture.detectChanges()` and then `vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS)` before `whenStable()`. After that, `fixture.detectChanges()` is enough inside fake-timer tests.
+  - **Harnesses:** Material harnesses are at `@angular/material/{table,sort,chips}/testing` and `TestbedHarnessEnvironment` is at `@angular/cdk/testing/testbed`. Both work zoneless. Typing into the search box in tests means setting `input.value` and dispatching a plain `new Event('input')`.
+  - **Route-scoped store tests:** `RouterTestingHarness` gives `harness.routeDebugElement.injector.get(DealsStore)`. To prove destruction, `dashboard-routes.spec.ts` copies `routes` and appends `provideEnvironmentInitializer(() => inject(DestroyRef).onDestroy(spy))` to the `dashboard` route's `providers`. This needs `withAutoCleanupInjectors()` in the test's `provideRouter`. The `/dashboard/lab` hop does not destroy the injector, but `/about` does.
+  - **Tailwind class bindings:** `[class.bg-primary/10]` isn't a safe class-binding name, so use a named utility (`row-selected`). For active and idle link colors, bind both sides explicitly (`[class.text-primary]="x()"` and `[class.text-on-surface-variant]="!x()"`) instead of stacking two color utilities.
+  - **SVG:** the bars use the `x` and `width` attributes plus a CSS `transition`, because jsdom's CSSStyleDeclaration ignores SVG geometry properties and tests need to read the values. Chrome transitions presentation-attribute changes.
+  - **Row flash:** an `effect` diffs `store.entities()` field-by-field against the previous snapshot. So `undo()` (which `structuredClone`s every entity) and `reset()` don't flash all 24 rows, and only truly changed rows flash. The first run flashes nothing.
+  - **Filter chips are removal-only.** A human can't add a stage or region filter from the UI yet. Filters come from the agent's `setDealFilter` (Session 5) and are removed here. Add toggle chips if a manual filter bar is wanted.
+  - **`isActive()`** takes `(url, router, matchOptions)`. Its defaults are `paths: 'subset'` and `queryParams: 'subset'`, and I always pass `queryParams: 'ignored'`.
+  - **`ProposalsStore`** from the blueprint's route providers is deferred to Session 7, where its file doesn't exist yet.
+  - **Blueprint deviation (non-functional):** commits 3.1 and 3.2 each shipped working specs for the pieces they introduced, so they stay above the coverage gate. Commit 3.3 added the cross-cutting scenarios (chart proportions and reactivity, sr-only table sync, EMEA filter, route sharing and destruction, axe on the full app at `/dashboard`).
+- **Ready for Session 4:**
+  - **WebMCP Platform & Read Tools (Act 1).** It starts with 4.1: `feat(mcp): add registry bootstrap, polyfill fallback and JSON-schema argument validator`, which also needs `npm i -E @mcp-b/webmcp-polyfill@6.0.3`. Then 4.2 adds `defineTool` and the read tools to the `dashboard` route `providers`, and 4.3 tests them.
