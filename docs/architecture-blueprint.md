@@ -1323,3 +1323,62 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - Commits 5.1 and 5.2 each had a green gate. 5.2 added no specs of its own beyond updating the two registration specs, and 5.3 added all the new scenarios.
 - **Ready for Session 6:**
   - **Human-in-the-Loop & Undo (Act 4).** It starts with 6.1 in the Session 6 block of this file. `HUMAN_APPROVAL_GATE` is still unprovided, so every risky call is rejected until `ApprovalService` is added and provided in the `dashboard` route.
+
+## Handoff Note: Session 6 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/mcp/tooling/with-snapshot.ts`: `Snapshotter {recordSnapshot(label): string}`, `SnapshotPlan<A> {target, label}` and `takeSnapshot(plan, args): string`.
+  - `src/app/mcp/tooling/define-tool.ts` (changed):
+    - `snapshot?: Snapshotter` (pass the store) plus `snapshotLabel?: (args) => string`. The label falls back to `title`, then `name`.
+    - `ToolContext` gained `snapshotId?: string`, set after approval and before `run`.
+    - The approval step now calls `requireApproval`.
+  - `src/app/mcp/tooling/with-human-approval.ts`: `requireApproval(gate | null, request, signal): Promise<Rejection | null>`, `Rejection`, `NO_GATE_NOTE`.
+  - `src/app/mcp/tooling/approval-gate.ts` (extended): `ApprovalRequest` gained `policy?: string[]` and `diff?: ApprovalDiffRow[]`. `ApprovalDiffRow` is `{label, field, before, after, note?}` and the dialog renders it. `details` stays as raw data for the inspector.
+  - `src/app/features/approvals/approval-service.ts`: `ApprovalService` (`@Service()`, root) implements `HumanApprovalGate`.
+    - Signals: `pending` (the request whose dialog is open) and `queued` (the number waiting behind it).
+    - `setAutoDecider(fn | null)`. `AutoDecider` takes a request and returns an `ApprovalDecision` or a promise of one. `ABORTED_NOTE` is `'aborted'`.
+    - It records `hitl` channel packets: `hitl/requested` (status `ok`, with `result.position`) and `hitl/resolved` (status `ok` or `rejected`, `latencyMs` = wait time since the request was queued, `result {approved, waitMs, note?}`). The two share a `correlationId` of the form `hitl-<n>`.
+  - `src/app/features/approvals/approval-dialog.ts` / `.html`: `ApprovalDialog`.
+    - Data is an `ApprovalRequest` and it closes with an `ApprovalDecision`.
+    - It has a risk badge, the summary, the agent's reason, the policy flags, a diff `<table>`, and a Signal Form note field.
+    - `data-testid`: `approve`, `reject`, `summary`, `reason`, `policy`, `diff`, `diff-row`, `risk-badge`.
+  - `src/app/app.routes.ts`: the `dashboard` route `providers` now include `{ provide: HUMAN_APPROVAL_GATE, useExisting: ApprovalService }`. `/about` has no gate.
+  - `src/app/features/dashboard/tools/deal-mutation-tools.ts`:
+    - `dealMutationTools` now returns 4 tools. The new one is `terminateContract` (`{dealId, reason}`), which is always `critical`.
+    - `DealMutationStore` gained `terminateContract` and `undoTo`.
+    - Output is `{status: 'applied'|'no_change', dealId, terminatedAt: ISO | null, skipped[]}`.
+    - The dashboard route now exposes **7 tools**.
+  - `src/app/features/history/undo-notifier.ts`:
+    - `announce(message, onUndo?: () => HistoryEntry | null)` records a `human/undo` packet when Undo is pressed, and only if `onUndo` returned an entry.
+    - New `recordUndo(entry | null, source: 'snackbar' | 'panel')`.
+    - The packet is channel `human`, with params `{entryId, label, source}` and result `{restored: label}`.
+  - `src/app/features/history/agent-history-panel.ts` / `.html`: `AgentHistoryPanel` (`<app-agent-history-panel />`).
+    - It renders nothing while `history` is empty. Otherwise it shows a glass section with the entries newest first, and an "Undo to here" button per entry that calls `store.undoTo(id)` and then `recordUndo(…, 'panel')`.
+    - It sits in `DashboardPage` between the chart and the table.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (394 tests; statements 98.67 %, branches 97.75 %, functions 97.03 %, lines 98.57 %) and `npm run build` pass on each of the 3 commits. The dialog, the panel and the real approve/reject flow were **not checked in a real browser**, only in jsdom.
+  - **Bundle budget (warning only):** the initial total is 538.95 kB raw against the CLI-default warning budget of 500 kB (the error limit is 1 MB). It was already 501.76 kB at the end of 6.1. Making `ApprovalService` eager (it is referenced from `app.routes.ts`) pulled about 35 kB of CDK overlay and a11y code into the initial chunk. The dialog component and `MatDialog` are already loaded lazily with `import()` inside the service. Options if it matters: raise `maximumWarning`, or find what else is eager.
+  - **Snackbar Undo uses `undoTo(snapshotId)`, not `undo()`.** This deviates from the blueprint wording and is safer: a stale snackbar can't revert a newer step, and a second press is a no-op. A no-op press records no packet.
+  - **Undo restores all state**, as noted in Session 2, including `filter`.
+  - **No-op snapshots:** a snapshot is still recorded for a call that then changes nothing (for example all deals already at that discount). The panel can therefore show an entry that restores identical state.
+  - **`terminateContract` is gated for every known deal**, even one without an active contract. Gating a no-op was kept so "always gated" is simple to state. An unknown ID throws `ToolInputError` before the dialog opens.
+  - **Dialog focus:**
+    - Reject gets `cdkFocusInitial` only for critical requests. For high-impact ones the first tabbable (the note field) gets focus.
+    - jsdom has no layout, so the CDK focus trap treats every element as invisible. `approval-dialog.spec.ts` stubs `Element.prototype.getClientRects` (`visibleToFocusTrap()`) to test focus.
+    - `disableClose: true` blocks both Esc and the backdrop. The service opens it with `role: 'alertdialog'`.
+  - **Testing the dialog flow without a harness:**
+    - `ApprovalService` loads the dialog through `await import(...)`, so wait with `await vi.waitFor(() => { TestBed.inject(ApplicationRef).tick(); expect(document.querySelector('app-approval-dialog')).not.toBeNull(); })`.
+    - `afterClosed` fires after the close animation, so also `waitFor` the dialog element to leave the document (see `press()` in `approval-service.spec.ts`).
+    - When requests are queued, wait for the _specific_ closed element, not for "no dialog", because the next one opens immediately.
+    - Type into the note with `textarea.value = …; dispatchEvent(new Event('input'))`.
+  - **Auto-decider and abort:** an abort on the active request wins over a slow decider (the decider's later result is ignored). A decider that throws becomes a rejection whose note is the error message.
+  - **Telemetry:**
+    - `hitl/*` packets use the `hitl` channel, so they stay out of `stats.calls` and the latency percentiles. The tool's own `tools/call` packet still closes as `rejected` on a human rejection.
+    - Session 8's `AgentSessionStore` can derive `awaiting-approval` from `ApprovalService.pending`, provided through `HUMAN_APPROVAL_GATE`.
+  - **Specs changed:** `context-tools-registration.spec.ts` and `deal-mutation-tools.spec.ts` now expect the 7 and 4 tools respectively. The `deal-mutation-tools.spec.ts` snackbar mock `open` returns a `{ onAction }` ref (one `Subject` per call, in `actions[]`).
+  - **Commit trailers:** none, as before. Verified with `git log -1 --format='%an <%ae>%n%(trailers)'`.
+  - **Blueprint deviations (non-functional):**
+    - `with-human-approval.ts` holds only the small `requireApproval` helper, and `defineTool` still owns the middleware order.
+    - Commit 6.2 added no specs of its own beyond updating the two registration specs, and 6.3 added all the scenarios, plus `approval-flow.spec.ts` (the real service, dialog and tools together) and two route assertions in `dashboard-routes.spec.ts`.
+- **Ready for Session 7:**
+  - **Signal Form Tool (Act 3).** It starts with the first commit in the Session 7 block. `ProposalsStore` still needs adding to the `dashboard` route `providers`, and `openProposalDrawer` should call `DashboardUiStore.openProposal()`. The `submission.action` approval path for discounts over 15 % can reuse `HUMAN_APPROVAL_GATE` and `ApprovalRequest.diff`/`policy`.
