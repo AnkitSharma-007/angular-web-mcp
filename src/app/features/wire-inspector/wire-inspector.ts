@@ -1,6 +1,6 @@
 import { Listbox, Option } from '@angular/aria/listbox';
 import { DecimalPipe } from '@angular/common';
-import { Component, DestroyRef, computed, inject, resource, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
@@ -83,12 +83,8 @@ export class WireInspector {
     return packet ? [packet.id] : [];
   });
 
-  private readonly toolsResource = resource({
-    params: () => this.gateway.toolsVersion(),
-    loader: async () => describeTools(this.gateway.tools(), this.gateway.lastChange()),
-  });
   protected readonly tools = computed(() =>
-    this.toolsResource.hasValue() ? this.toolsResource.value() : [],
+    describeTools(this.gateway.tools(), this.gateway.lastChange()),
   );
 
   protected readonly stats = this.telemetry.stats;

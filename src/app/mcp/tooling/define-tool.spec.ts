@@ -4,7 +4,6 @@ import type { WebMcpToolDescriptor } from '@angular/core';
 import { CLOCK } from '../../core/util/clock';
 import { HUMAN_APPROVAL_GATE, type HumanApprovalGate } from './approval-gate';
 import { defineTool, toToolResult, type ToolDefinition } from './define-tool';
-import { ToolInputError } from './tool-errors';
 import { TOOL_TELEMETRY } from './with-telemetry';
 
 const SCHEMA = {
@@ -53,6 +52,12 @@ function parse(result: unknown): unknown {
   return JSON.parse((result as { content: { text: string }[] }).content[0]?.text ?? 'null');
 }
 
+function failure(result: unknown): string {
+  const envelope = result as { isError?: boolean; content: { text: string }[] };
+  expect(envelope.isError).toBe(true);
+  return envelope.content[0]?.text ?? '';
+}
+
 describe('defineTool', () => {
   beforeEach(() => {
     end.mockClear();
@@ -80,13 +85,11 @@ describe('defineTool', () => {
     expect(toToolResult(undefined).content[0]?.text).toBe('null');
   });
 
-  it('rejects invalid input with the field path and never runs the body', async () => {
+  it('returns invalid input as an error result with the field path and never runs the body', async () => {
     setup();
     const run = vi.fn();
-    const error = await invoke(tool({ run }), { dealId: 'nope' }).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ToolInputError);
-    expect((error as ToolInputError).issues[0]?.path).toBe('dealId');
-    expect((error as ToolInputError).message).toContain('Invalid input for probe: dealId');
+    const message = failure(await invoke(tool({ run }), { dealId: 'nope' }));
+    expect(message).toContain('Invalid input for probe: dealId');
     expect(run).not.toHaveBeenCalled();
     expect(end).toHaveBeenCalledWith(
       'error',
@@ -96,7 +99,7 @@ describe('defineTool', () => {
 
   it('treats missing args as an empty object', async () => {
     setup();
-    await expect(invoke(tool(), undefined)).rejects.toThrow('dealId: is required');
+    expect(failure(await invoke(tool(), undefined))).toContain('dealId: is required');
   });
 
   it('opens a span with the tool name and closes it with latency from CLOCK', async () => {
@@ -107,11 +110,12 @@ describe('defineTool', () => {
     expect(end).toHaveBeenCalledWith('ok', { latencyMs: 50, result: { ok: true } });
   });
 
-  it('records failures from the body and rethrows them', async () => {
+  it('records failures from the body and returns them as error results', async () => {
     setup();
-    await expect(
-      invoke(tool({ run: () => Promise.reject(new Error('boom')) }), { dealId: 'D-1001' }),
-    ).rejects.toThrow('boom');
+    const result = await invoke(tool({ run: () => Promise.reject(new Error('boom')) }), {
+      dealId: 'D-1001',
+    });
+    expect(failure(result)).toBe('boom');
     expect(end).toHaveBeenCalledWith('error', expect.objectContaining({ error: 'boom' }));
   });
 
@@ -120,7 +124,7 @@ describe('defineTool', () => {
     const run = () => {
       throw 'plain';
     };
-    await expect(invoke(tool({ run }), { dealId: 'D-1001' })).rejects.toBe('plain');
+    expect(failure(await invoke(tool({ run }), { dealId: 'D-1001' }))).toBe('plain');
     expect(end).toHaveBeenCalledWith('error', expect.objectContaining({ error: 'plain' }));
   });
 
@@ -236,9 +240,7 @@ describe('defineTool', () => {
     it('does not snapshot when validation fails or the tool has no snapshot target', async () => {
       setup();
       const recordSnapshot = vi.fn(() => 'h-1');
-      await expect(
-        invoke(tool({ snapshot: { recordSnapshot } }), { dealId: 'nope' }),
-      ).rejects.toThrow(ToolInputError);
+      failure(await invoke(tool({ snapshot: { recordSnapshot } }), { dealId: 'nope' }));
       await invoke(tool(), { dealId: 'D-1001' });
       expect(recordSnapshot).not.toHaveBeenCalled();
     });
@@ -292,7 +294,7 @@ describe('defineTool', () => {
         risk: () => REQUEST,
         run: () => inject(DEP),
       });
-      await expect(invoke(naive, { dealId: 'D-1001' })).rejects.toThrow(/NG0203|inject\(\)/);
+      expect(failure(await invoke(naive, { dealId: 'D-1001' }))).toMatch(/NG0203|inject\(\)/);
     });
   });
 });

@@ -50,7 +50,7 @@ describe('withWebMcpTools', () => {
   }
 
   async function text(name: string): Promise<string> {
-    const result = (await registry.current.executeTool(name, {})) as {
+    const result = (await registry.current.call(name, {})) as {
       content: { text: string }[];
     };
     return result.content[0]?.text ?? '';

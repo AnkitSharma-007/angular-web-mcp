@@ -30,7 +30,7 @@ describe('approval gating end to end', () => {
   });
 
   const execute = (name: string, args: Record<string, unknown>, signal?: AbortSignal) =>
-    registry.current.executeTool(name, args, signal ? { signal } : {}) as Promise<{
+    registry.current.call(name, args, signal ? { signal } : {}) as Promise<{
       content: { text: string }[];
     }>;
 
@@ -108,17 +108,21 @@ describe('approval gating end to end', () => {
     expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
   });
 
-  it('turns an aborted agent run into a rejection with the note "aborted"', async () => {
+  it('rejects the caller and closes the approval without committing when the run is aborted', async () => {
     const controller = new AbortController();
     const call = execute(
       'updateDealStages',
       { updates: [{ dealId: 'D-1002', stage: 'closed-lost' }], reason: REASON },
       controller.signal,
     );
+    const settled = call.then(
+      () => null,
+      (error: unknown) => error as Error,
+    );
     await dialog();
     controller.abort();
 
-    expect(parse(await call)).toEqual({ status: 'rejected_by_human', note: 'aborted' });
+    expect((await settled)?.name).toBe('AbortError');
     expect(store.entityMap()['D-1002']?.stage).toBe('negotiation');
     expect(store.canUndo()).toBe(false);
     await vi.waitFor(() => {

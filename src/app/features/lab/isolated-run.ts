@@ -1,4 +1,4 @@
-import { Service, computed, inject, injectAsync, signal } from '@angular/core';
+import { DestroyRef, Service, computed, inject, injectAsync, signal } from '@angular/core';
 import type { Deal, DealFilter } from '../../core/models/deal';
 import type { ProposalDraft } from '../../core/models/proposal';
 import { CLOCK } from '../../core/util/clock';
@@ -6,6 +6,7 @@ import type { AgentErrorKind, AgentEvent } from '../../mcp/agent/agent-events';
 import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
 import type { TokenUsage } from '../../mcp/telemetry/wire-packet';
 import type { ApprovalDecision, ApprovalRequest } from '../../mcp/tooling/approval-gate';
+import { PresenterActions } from '../agent-console/presenter-actions';
 import { ApprovalService } from '../approvals/approval-service';
 import { DashboardUiStore } from '../dashboard/data/dashboard-ui-store';
 import { DealsStore } from '../dashboard/data/deals-store';
@@ -68,11 +69,12 @@ export interface IsolatedRunOptions {
   runId?: string;
   signal?: AbortSignal;
   maxSteps?: number;
+  fromSeed?: boolean;
 }
 
 const NO_USAGE: TokenUsage = { input: 0, output: 0, thinking: 0 };
 
-/** Runs one agent prompt against the live dashboard stores, then puts every store back exactly as it was. */
+/** Runs one agent prompt against the live dashboard stores (or the seed, with `fromSeed`), then puts every store back exactly as it was. */
 @Service({ autoProvided: false })
 export class IsolatedRunner {
   private readonly deals = inject(DealsStore);
@@ -89,6 +91,16 @@ export class IsolatedRunner {
   private readonly runId = signal<string | null>(null);
   private tail: Promise<unknown> = Promise.resolve();
   private sequence = 0;
+  private epoch = 0;
+  private lifecycle = new AbortController();
+
+  constructor() {
+    const unregister = inject(PresenterActions).registerReset(() => this.interrupt(true));
+    inject(DestroyRef).onDestroy(() => {
+      unregister();
+      this.interrupt(false);
+    });
+  }
 
   readonly evalMode = computed(() => this.holds() > 0);
   readonly activeRunId = this.runId.asReadonly();
@@ -114,12 +126,17 @@ export class IsolatedRunner {
 
   private async execute(options: IsolatedRunOptions): Promise<RunOutcome> {
     const runId = options.runId ?? `run-${++this.sequence}`;
-    const signal = options.signal ?? new AbortController().signal;
+    const epoch = this.epoch;
+    const lifecycle = this.lifecycle.signal;
+    const signal = options.signal ? AbortSignal.any([options.signal, lifecycle]) : lifecycle;
     const baseline = {
       deals: this.deals.snapshotState(),
       proposals: this.proposals.snapshotState(),
       ui: this.ui.snapshotState(),
     };
+    if (options.fromSeed) {
+      this.seed();
+    }
     const script = [...(options.approvals ?? [])];
     const decisions: DecisionRecord[] = [];
     const toolCalls: ToolCallRecord[] = [];
@@ -182,13 +199,34 @@ export class IsolatedRunner {
         proposals: this.viewProposals(),
       };
     } finally {
-      this.deals.restoreState(baseline.deals);
-      this.proposals.restoreState(baseline.proposals);
-      this.ui.restoreState(baseline.ui);
+      if (this.epoch === epoch) {
+        this.deals.restoreState(baseline.deals);
+        this.proposals.restoreState(baseline.proposals);
+        this.ui.restoreState(baseline.ui);
+      } else {
+        this.seed();
+      }
       this.approvals.setAutoDecider(null);
       this.telemetry.setActiveRun(null);
       this.runId.set(null);
     }
+  }
+
+  /** Stops every active run; after a presenter reset the stores end at the seed, not at a stale snapshot. */
+  private interrupt(reset: boolean): void {
+    if (reset) {
+      this.epoch++;
+    }
+    this.lifecycle.abort();
+    this.lifecycle = new AbortController();
+  }
+
+  private seed(): void {
+    this.ui.closeProposal();
+    this.ui.selectDeal(null);
+    this.deals.reset();
+    this.deals.clearHistory();
+    this.proposals.clearDrafts();
   }
 
   private viewDeals(): DealsView {

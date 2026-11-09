@@ -84,23 +84,9 @@ export function withDeals() {
         return result;
       },
       moveStages(updates: readonly StageUpdate[]): MutationResult<DealStage> {
-        const result: MutationResult<DealStage> = { changed: [], skipped: [] };
-        const changes: { id: string; changes: Partial<Deal> }[] = [];
-        for (const { dealId: id, stage } of updates) {
-          const deal = store.entityMap()[id];
-          if (!deal) {
-            result.skipped.push({ id, why: 'unknown deal' });
-          } else if (isClosedStage(deal.stage)) {
-            result.skipped.push({ id, why: 'closed deals cannot be reopened' });
-          } else if (deal.stage === stage) {
-            result.skipped.push({ id, why: `already in ${stage}` });
-          } else {
-            result.changed.push({ id, before: deal.stage, after: stage });
-            changes.push({ id, changes: closeOutChanges(stage) });
-          }
-        }
-        patchState(store, ...changes.map((change) => updateEntity<Deal>(change)));
-        return result;
+        const { changed, skipped, patches } = planStageMoves(store.entityMap(), updates);
+        patchState(store, ...patches.map((patch) => updateEntity<Deal>(patch)));
+        return { changed, skipped };
       },
       terminateContract(dealId: string): MutationResult<ContractStatus> {
         const deal = store.entityMap()[dealId];
@@ -125,6 +111,32 @@ export function withDeals() {
       },
     })),
   );
+}
+
+export interface StagePlan extends MutationResult<DealStage> {
+  patches: { id: string; changes: Partial<Deal> }[];
+}
+
+/** Decides which stage moves apply and exactly which fields each one writes, without touching state. */
+export function planStageMoves(
+  entities: Readonly<Record<string, Deal | undefined>>,
+  updates: readonly StageUpdate[],
+): StagePlan {
+  const plan: StagePlan = { changed: [], skipped: [], patches: [] };
+  for (const { dealId: id, stage } of updates) {
+    const deal = entities[id];
+    if (!deal) {
+      plan.skipped.push({ id, why: 'unknown deal' });
+    } else if (isClosedStage(deal.stage)) {
+      plan.skipped.push({ id, why: 'closed deals cannot be reopened' });
+    } else if (deal.stage === stage) {
+      plan.skipped.push({ id, why: `already in ${stage}` });
+    } else {
+      plan.changed.push({ id, before: deal.stage, after: stage });
+      plan.patches.push({ id, changes: closeOutChanges(stage) });
+    }
+  }
+  return plan;
 }
 
 function closeOutChanges(stage: DealStage): Partial<Deal> {

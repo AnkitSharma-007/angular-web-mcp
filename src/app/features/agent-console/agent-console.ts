@@ -4,6 +4,7 @@ import {
   computed,
   inject,
   linkedSignal,
+  untracked,
   viewChild,
   type ElementRef,
 } from '@angular/core';
@@ -65,8 +66,17 @@ export class AgentConsole {
   });
 
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
+  private readonly prompt = viewChild<ElementRef<HTMLTextAreaElement>>('prompt');
+  private readonly draftNonce = computed(() => this.presenter.draft()?.nonce);
 
   constructor() {
+    afterRenderEffect(() => {
+      const nonce = this.draftNonce();
+      const element = this.prompt()?.nativeElement;
+      if (nonce !== undefined && element && !untracked(this.locked)) {
+        element.focus();
+      }
+    });
     afterRenderEffect(() => {
       this.session.transcript();
       const element = this.log()?.nativeElement;

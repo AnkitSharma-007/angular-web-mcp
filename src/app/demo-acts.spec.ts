@@ -18,6 +18,7 @@ import { LayoutStore } from './features/layout/layout-store';
 import { ProposalsStore } from './features/proposal/proposals-store';
 import { SettingsStore } from './features/settings/settings-store';
 import type { AgentEvent } from './mcp/agent/agent-events';
+import { DiscoveryTracker } from './mcp/registry/discovery-tracker';
 import { AgentSessionStore } from './mcp/agent/agent-session-store';
 import { GENAI_CLIENT_FACTORY } from './mcp/agent/gemini/genai-client';
 import { WireTelemetryStore } from './mcp/telemetry/wire-telemetry-store';
@@ -303,6 +304,7 @@ describe('demo acts', () => {
       timeout: TIME_BUDGET_MS,
       interval: POLL_MS,
     });
+    await TestBed.inject(DiscoveryTracker).idle();
     await demo.settle();
 
     expect(demo.deals.entities()).toEqual(createSeedDeals());

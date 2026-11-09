@@ -66,7 +66,7 @@ describe('dashboard tools route-scoped registration', () => {
   it('executes through the registry against the route store', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/dashboard');
-    const result = (await registry.current.executeTool('searchDeals', { limit: 1 })) as {
+    const result = (await registry.current.call('searchDeals', { limit: 1 })) as {
       content: { text: string }[];
     };
     expect(JSON.parse(result.content[0]?.text ?? '{}')).toMatchObject({ total: 24 });

@@ -28,6 +28,12 @@ export interface ToolDefinition<A, D = void> {
 
 export interface ToolResult {
   content: { type: 'text'; text: string }[];
+  isError?: true;
+}
+
+/** Registries hide thrown errors behind a generic failure, so failures travel as results the model can read. */
+export function toErrorResult(message: string): ToolResult {
+  return { content: [{ type: 'text', text: message }], isError: true };
 }
 
 const INSTRUMENTED = new Set<string>();
@@ -88,8 +94,9 @@ export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDe
         finish('ok', { result: value ?? null });
         return toToolResult(value);
       } catch (error) {
-        finish('error', { error: error instanceof Error ? error.message : String(error) });
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        finish('error', { error: message });
+        return toErrorResult(message);
       }
     },
   };

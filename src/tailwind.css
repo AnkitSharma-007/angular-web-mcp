@@ -10,7 +10,9 @@
   --color-surface: var(--mat-sys-surface);
   --color-on-surface: var(--mat-sys-on-surface);
   --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-outline: var(--mat-sys-outline);
   --color-outline-variant: var(--mat-sys-outline-variant);
+  --color-tertiary: var(--mat-sys-tertiary);
   --color-error: var(--mat-sys-error);
   --color-success: var(--app-success);
 }

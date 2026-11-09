@@ -123,7 +123,7 @@ export class GeminiAgent {
       automaticFunctionCalling: { disable: true },
     });
 
-    let tools = this.gateway.listTools();
+    let tools = await this.gateway.listTools();
     let knownVersion = this.gateway.toolsVersion();
     let declarations = toFunctionDeclarations(tools);
 
@@ -142,7 +142,7 @@ export class GeminiAgent {
         if (this.gateway.toolsVersion() !== knownVersion) {
           knownVersion = this.gateway.toolsVersion();
           const before = tools.map((tool) => tool.name);
-          tools = this.gateway.listTools();
+          tools = await this.gateway.listTools();
           declarations = toFunctionDeclarations(tools);
           const { added, removed } = diffTools(
             before,

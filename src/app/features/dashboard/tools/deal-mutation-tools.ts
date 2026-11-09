@@ -17,7 +17,12 @@ import { defineTool, type ToolContext } from '../../../mcp/tooling/define-tool';
 import { ToolInputError } from '../../../mcp/tooling/tool-errors';
 import { UndoNotifier } from '../../history/undo-notifier';
 import type { StageUpdate } from '../data/with-deals';
-import { assessDiscount, assessStageMoves, discountImpact } from './risk-policy';
+import {
+  assessDiscount,
+  assessStageMoves,
+  discountImpact,
+  type StageAssessment,
+} from './risk-policy';
 
 export interface DealMutationStore {
   readonly entityMap: Signal<Readonly<Record<string, Deal | undefined>>>;
@@ -39,7 +44,8 @@ const REASON = {
   type: 'string',
   minLength: 3,
   maxLength: 200,
-  description: 'Why this change is being made. Shown to the human and kept in the audit trail',
+  description:
+    'Why this change is being made. Shown to the human in the approval dialog and recorded in the wire log',
 } as const;
 
 function outcome(changed: number, skipped: number): Outcome {
@@ -224,17 +230,24 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
         : {
             toolName: 'updateDealStages',
             risk: 'high',
-            summary: `Mark ${plural(assessment.flaggedDeals.length, 'large deal')} as closed-lost`,
+            summary: summarizeStageBatch(assessment),
             reason,
             policy: assessment.flags,
-            diff: assessment.flaggedDeals.map((deal) => ({
-              label: `${deal.account} (${deal.id})`,
+            diff: assessment.moves.map((move) => ({
+              label: `${move.account} (${move.id})`,
               field: 'Stage',
-              before: DEAL_STAGE_LABELS[store.entityMap()[deal.id]?.stage ?? 'closed-lost'],
-              after: DEAL_STAGE_LABELS['closed-lost'],
-              note: `${formatCompactCurrency(deal.netValue)} net value`,
+              before: DEAL_STAGE_LABELS[move.before],
+              after: DEAL_STAGE_LABELS[move.after],
+              note: [
+                `${formatCompactCurrency(move.netValue)} net value`,
+                ...(move.effect ? [move.effect] : []),
+              ].join('. '),
             })),
-            details: { policy: assessment.flags, deals: assessment.flaggedDeals },
+            details: {
+              policy: assessment.flags,
+              deals: assessment.flaggedDeals,
+              moves: assessment.moves,
+            },
           };
     },
     snapshot: store,
@@ -309,6 +322,13 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
   });
 
   return [setDealFilter, applyBatchDiscount, updateDealStages, terminateContract];
+}
+
+function summarizeStageBatch(assessment: StageAssessment): string {
+  const flagged = assessment.flaggedDeals.length;
+  const others = assessment.moves.length - flagged;
+  const head = `Mark ${plural(flagged, 'large deal')} as closed-lost`;
+  return others > 0 ? `${head}, and apply ${plural(others, 'other stage move')}` : head;
 }
 
 function lastPerDeal(updates: readonly StageUpdate[]): StageUpdate[] {

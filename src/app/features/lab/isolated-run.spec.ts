@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { CLOCK } from '../../core/util/clock';
+import { createSeedDeals } from '../../core/data/seed-deals';
 import { createProposalModel } from '../../core/models/proposal';
 import type { AgentEvent } from '../../mcp/agent/agent-events';
 import { GeminiAgent, type AgentRunOptions } from '../../mcp/agent/gemini/gemini-agent';
 import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
 import type { ApprovalDecision, ApprovalRequest } from '../../mcp/tooling/approval-gate';
+import { PresenterActions } from '../agent-console/presenter-actions';
 import { ApprovalService } from '../approvals/approval-service';
 import { DashboardUiStore } from '../dashboard/data/dashboard-ui-store';
 import { DealsStore } from '../dashboard/data/deals-store';
@@ -69,6 +71,117 @@ const RUN = { prompt: 'Do the thing', model: 'gemini-3.8-flash' };
 
 describe('IsolatedRunner', () => {
   beforeAll(() => import('../../mcp/agent/gemini/gemini-agent'));
+
+  describe('starting state', () => {
+    function changeLiveState(
+      deals: InstanceType<typeof DealsStore>,
+      proposals: InstanceType<typeof ProposalsStore>,
+      ui: InstanceType<typeof DashboardUiStore>,
+    ) {
+      deals.recordSnapshot('earlier change');
+      deals.applyDiscount(['D-1002'], 12);
+      deals.setFilter({ regions: ['EMEA'] });
+      proposals.saveDraft(createProposalModel({ dealId: 'D-1001' }));
+      ui.openProposal('D-1001');
+    }
+
+    it('starts from the current dashboard by default', async () => {
+      const { runner, deals, proposals, ui } = setup();
+      changeLiveState(deals, proposals, ui);
+      let discount: number | undefined;
+      behaviour = async function* () {
+        discount = deals.entityMap()['D-1002']?.discountPct;
+        yield DONE;
+      };
+      await runner.run(RUN);
+      expect(discount).toBe(12);
+    });
+
+    it('starts from the seed with fromSeed, then restores the live dashboard', async () => {
+      const { runner, deals, proposals, ui } = setup();
+      changeLiveState(deals, proposals, ui);
+      const live = {
+        deals: deals.snapshotState(),
+        proposals: proposals.snapshotState(),
+        ui: ui.snapshotState(),
+      };
+      let seen: unknown;
+      behaviour = async function* () {
+        seen = {
+          discount: deals.entityMap()['D-1002']?.discountPct,
+          filter: deals.filter().regions,
+          history: deals.history().length,
+          drafts: proposals.entities().length,
+          drawer: ui.proposalOpen(),
+        };
+        yield DONE;
+      };
+      await runner.run({ ...RUN, fromSeed: true });
+      expect(seen).toEqual({
+        discount: createSeedDeals().find((deal) => deal.id === 'D-1002')?.discountPct,
+        filter: [],
+        history: 0,
+        drafts: 0,
+        drawer: false,
+      });
+      expect(deals.snapshotState()).toEqual(live.deals);
+      expect(proposals.snapshotState()).toEqual(live.proposals);
+      expect(ui.snapshotState()).toEqual(live.ui);
+    });
+  });
+
+  describe('presenter reset and lifecycle', () => {
+    const untilAborted = (signal: AbortSignal) =>
+      new Promise<void>((resolve) =>
+        signal.addEventListener('abort', () => resolve(), { once: true }),
+      );
+
+    it('aborts the active run on reset and leaves the seed, not the stale snapshot', async () => {
+      const { runner, deals } = setup();
+      deals.recordSnapshot('before the run');
+      deals.applyDiscount(['D-1002'], 12);
+      let started!: () => void;
+      const running = new Promise<void>((resolve) => (started = resolve));
+      behaviour = async function* (_, { signal }) {
+        deals.applyDiscount(['D-1003'], 20);
+        started();
+        await untilAborted(signal);
+      };
+
+      const outcome = runner.run(RUN);
+      await running;
+      TestBed.inject(PresenterActions).reset();
+      const result = await outcome;
+
+      const seed = createSeedDeals();
+      expect(result.stopped).toBe(true);
+      expect(deals.entityMap()['D-1002']?.discountPct).toBe(
+        seed.find((deal) => deal.id === 'D-1002')?.discountPct,
+      );
+      expect(deals.entityMap()['D-1003']?.discountPct).toBe(
+        seed.find((deal) => deal.id === 'D-1003')?.discountPct,
+      );
+      expect(deals.history()).toHaveLength(0);
+    });
+
+    it('restores the live snapshot normally when no reset happened', async () => {
+      const { runner, deals } = setup();
+      deals.applyDiscount(['D-1002'], 12);
+      behaviour = async function* () {
+        deals.applyDiscount(['D-1002'], 30);
+        yield DONE;
+      };
+      await runner.run(RUN);
+      expect(deals.entityMap()['D-1002']?.discountPct).toBe(12);
+    });
+
+    it('does not abort a run that starts after a reset', async () => {
+      const { runner } = setup();
+      TestBed.inject(PresenterActions).reset();
+      const outcome = await runner.run(RUN);
+      expect(outcome.stopped).toBe(false);
+    });
+  });
 
   describe('isolation', () => {
     it('leaves every store exactly as it found it', async () => {

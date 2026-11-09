@@ -204,6 +204,38 @@ describe('AgentConsole', () => {
       expect(runs).toHaveLength(0);
     });
 
+    it('focuses the composer when a hotkey fills a prompt, so Enter runs it', async () => {
+      const { fixture, q, runs } = setup();
+      TestBed.inject(PresenterActions).fillChip('2');
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(q('prompt'));
+      q('prompt')?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+      await settle(fixture);
+      expect(runs).toHaveLength(1);
+    });
+
+    it('focuses the composer again for the next hotkey, but not on unrelated renders', async () => {
+      const { fixture, q, type } = setup();
+      const presenter = TestBed.inject(PresenterActions);
+      presenter.fillChip('1');
+      await fixture.whenStable();
+      q<HTMLButtonElement>('close')?.focus();
+      await type('typed elsewhere');
+      expect(document.activeElement).toBe(q('close'));
+      presenter.fillChip('3');
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(q('prompt'));
+    });
+
+    it('leaves focus alone when the composer is locked', async () => {
+      const { fixture, q } = setup({ key: null });
+      TestBed.inject(PresenterActions).fillChip('1');
+      await fixture.whenStable();
+      expect(document.activeElement).not.toBe(q('prompt'));
+    });
+
     it('goes back to the saved model and an empty input after a presenter reset', async () => {
       const { fixture, q } = setup();
       const presenter = TestBed.inject(PresenterActions);

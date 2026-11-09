@@ -137,6 +137,12 @@ describe('EvalSessionStore', () => {
       expect(used[0]).toBe(act2?.prompts[0]);
     });
 
+    it('starts every eval run from the seed state', async () => {
+      const { store, runner } = setup();
+      await store.run();
+      expect(runner.run.mock.calls.every(([options]) => options.fromSeed === true)).toBe(true);
+    });
+
     it('passes the scripted approvals for the governance act only', async () => {
       const { store, runner } = setup();
       await store.run();

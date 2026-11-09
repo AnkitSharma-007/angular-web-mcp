@@ -45,23 +45,23 @@ describe('McpToolGateway', () => {
     return controller;
   }
 
-  const flush = () => new Promise<void>((resolve) => queueMicrotask(resolve));
+  const flush = () => new Promise<void>((resolve) => setTimeout(resolve));
 
   describe('listTools', () => {
-    it('returns the registry tools and records a tools/list packet', () => {
+    it('returns the registry tools and records a tools/list packet', async () => {
       register('alpha');
       register('beta');
       const { gateway, telemetry } = setup();
-      expect(gateway.listTools().map((t) => t.name)).toEqual(['alpha', 'beta']);
+      expect((await gateway.listTools()).map((t) => t.name)).toEqual(['alpha', 'beta']);
       const [packet] = telemetry.entities();
       expect(packet).toMatchObject({ channel: 'mcp', method: 'tools/list', status: 'ok' });
       expect(packet?.envelope.response?.result).toEqual({ tools: ['alpha', 'beta'] });
     });
 
-    it('returns nothing when no registry exists', () => {
+    it('returns nothing when no registry exists', async () => {
       const { gateway } = setup();
       (document as unknown as { modelContext?: unknown }).modelContext = undefined;
-      expect(gateway.listTools()).toEqual([]);
+      await expect(gateway.listTools()).resolves.toEqual([]);
     });
   });
 
@@ -107,14 +107,47 @@ describe('McpToolGateway', () => {
       expect(good).toMatchObject({ ok: true, result: 'Form submitted successfully.' });
     });
 
-    it('turns a thrown tool error into a failed result', async () => {
+    it('turns a thrown tool error into a failed result without the tool message', async () => {
       register('boom', () => {
         throw new Error('bad input');
       });
       const { gateway, telemetry } = setup();
       const outcome = await gateway.callTool('boom', {});
-      expect(outcome).toMatchObject({ ok: false, result: { error: 'bad input' } });
+      expect(outcome).toMatchObject({
+        ok: false,
+        result: { error: 'UnknownError: Tool execution failed' },
+      });
       expect(telemetry.entities()[0]).toMatchObject({ status: 'error' });
+    });
+
+    it('keeps the validation message of a defineTool failure readable to the model', async () => {
+      const tool = defineTool<{ n: number }>({
+        name: 'strict',
+        description: 'x',
+        inputSchema: {
+          type: 'object',
+          properties: { n: { type: 'number' } },
+          required: ['n'],
+          additionalProperties: false,
+        },
+        run: () => ({ done: true }),
+      });
+      const { gateway } = setup();
+      await declareExperimentalWebMcpTool(tool, TestBed.inject(Injector));
+      const outcome = await gateway.callTool('strict', { n: 'nope' });
+      expect(outcome.ok).toBe(false);
+      expect(JSON.stringify(outcome.result)).toContain('n');
+      expect(JSON.stringify(outcome.result)).toContain('Invalid input for strict');
+      expect(JSON.stringify(outcome.result)).not.toContain('Tool execution failed');
+    });
+
+    it('decodes a bare serialized string and non-JSON text', async () => {
+      register('bare', () => 'Form submitted successfully.' as never);
+      const { gateway } = setup();
+      expect(await gateway.callTool('bare', {})).toMatchObject({
+        ok: true,
+        result: 'Form submitted successfully.',
+      });
     });
 
     it('answers an unknown tool with an error result instead of throwing', async () => {
@@ -127,23 +160,49 @@ describe('McpToolGateway', () => {
     it('honours isError and non-content results', async () => {
       register('flagged', () => ({ content: [{ type: 'text', text: 'x' }], isError: true }));
       register('raw', () => ({ answer: 42 }));
-      register('empty', () => undefined);
+      register('nothing', () => null);
       const { gateway } = setup();
       expect((await gateway.callTool('flagged', {})).ok).toBe(false);
       expect(await gateway.callTool('raw', {})).toMatchObject({ ok: true, result: { answer: 42 } });
-      expect(await gateway.callTool('empty', {})).toMatchObject({ ok: true, result: null });
+      expect(await gateway.callTool('nothing', {})).toMatchObject({ ok: true, result: null });
     });
 
-    it('forwards the abort signal to the tool', async () => {
+    it('aborts the running tool and fails the call when the caller aborts', async () => {
       let received: AbortSignal | undefined;
       register('watch', ((_: never, client?: { signal?: AbortSignal }) => {
         received = client?.signal;
-        return text('1');
+        return new Promise(() => undefined);
       }) as never);
       const { gateway } = setup();
       const controller = new AbortController();
-      await gateway.callTool('watch', {}, controller.signal);
-      expect(received).toBe(controller.signal);
+      const running = gateway.callTool('watch', {}, controller.signal);
+      await vi.waitFor(() => expect(received).toBeDefined());
+      controller.abort();
+      expect((await running).ok).toBe(false);
+      expect(received?.aborted).toBe(true);
+    });
+
+    it('does not run a tool when the caller is already aborted', async () => {
+      const execute = vi.fn(() => text('1'));
+      register('skipped', execute);
+      const { gateway } = setup();
+      const outcome = await gateway.callTool('skipped', {}, AbortSignal.abort());
+      expect(outcome.ok).toBe(false);
+      expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('records a failed call for an unknown tool even if it was once instrumented', async () => {
+      const tool = defineTool<Record<string, never>>({
+        name: 'formerTool',
+        description: 'x',
+        inputSchema: { type: 'object', additionalProperties: false },
+        run: () => null,
+      });
+      expect(tool.name).toBe('formerTool');
+      const { gateway, telemetry } = setup();
+      const outcome = await gateway.callTool('formerTool', {});
+      expect(outcome.ok).toBe(false);
+      expect(telemetry.entities().filter((p) => p.method === 'tools/call')).toHaveLength(1);
     });
 
     it('fails cleanly when there is no registry', async () => {
@@ -222,7 +281,9 @@ describe('McpToolGateway', () => {
     it('starts from the tools that are already registered', async () => {
       register('existing');
       const { gateway } = setup();
-      expect(gateway.tools().map((t) => t.name)).toEqual(['existing']);
+      await vi.waitFor(() => expect(gateway.tools().map((t) => t.name)).toEqual(['existing']));
+      expect(gateway.discovery()).toBe('ready');
+      expect(gateway.toolsVersion()).toBe(0);
       register('later');
       await flush();
       expect(gateway.lastChange()?.added).toEqual(['later']);
@@ -268,6 +329,49 @@ describe('McpToolGateway', () => {
       const { gateway } = setup();
       (document as unknown as { modelContext?: unknown }).modelContext = undefined;
       await expect(gateway.waitForTool('x', 10)).resolves.toBe(false);
+    });
+  });
+
+  describe('discovery robustness', () => {
+    it('does not let a slow older read resurrect a removed tool', async () => {
+      const controller = register('late');
+      const { gateway } = setup();
+      await vi.waitFor(() => expect(gateway.tools()).toHaveLength(1));
+
+      const real = registry.current.getTools.bind(registry.current);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let calls = 0;
+      vi.spyOn(registry.current, 'getTools').mockImplementation(async () => {
+        const snapshot = await real();
+        if (++calls === 1) {
+          await gate;
+        }
+        return snapshot;
+      });
+
+      registry.current.dispatchEvent(new Event('toolchange'));
+      await flush();
+      controller.abort();
+      await flush();
+      expect(gateway.tools()).toEqual([]);
+
+      release();
+      await flush();
+      expect(gateway.tools()).toEqual([]);
+      expect(gateway.lastChange()?.removed).toEqual(['late']);
+    });
+
+    it('reports an error state when discovery fails and recovers on the next change', async () => {
+      const spy = vi
+        .spyOn(registry.current, 'getTools')
+        .mockRejectedValueOnce(new Error('registry unavailable'));
+      const { gateway } = setup();
+      await vi.waitFor(() => expect(gateway.discovery()).toBe('error'));
+      spy.mockRestore();
+      register('back');
+      await vi.waitFor(() => expect(gateway.discovery()).toBe('ready'));
+      expect(gateway.tools().map((t) => t.name)).toEqual(['back']);
     });
   });
 });

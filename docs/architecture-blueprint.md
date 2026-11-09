@@ -56,7 +56,12 @@
 
 **Chrome 158:**
 
-- Client API: `document.modelContext` with `getTools()` (sorted), `executeTool(tool, args, { signal })` (args as an object), and the `toolchange` event.
+- Client API (`webmcp-types@0.1.10`, and the same shape in `@mcp-b/webmcp-polyfill@6.0.3`): `document.modelContext` with
+  - `getTools(): Promise<RegisteredTool[]>` (sorted). Each descriptor carries `name`, `title`, `description`, `inputSchema`, `annotations`, plus the registering `origin` and `window`.
+  - `executeTool(tool: RegisteredTool, input, { signal }): Promise<string>`. It takes the **descriptor, not a name**. The input is JSON-copied, and the result is a **serialized JSON string** of whatever the tool returned.
+  - a caller abort rejects the returned promise and aborts the tool's own signal.
+  - a tool that throws is reported as a generic `UnknownError: Tool execution failed`. **The tool's own message never reaches the client**, so model-facing failures must be returned as `isError` results (D7).
+  - the `toolchange` event.
 - Status: origin trial / flag, with no Intent-to-Ship yet ([source](https://developer.chrome.com/docs/ai/webmcp/secure-tools)). Enable `chrome://flags/#enable-webmcp-testing` on the stage laptop.
 - Other browsers get the polyfill. Hosting (Vercel) is owner-managed.
 
@@ -167,22 +172,22 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
 
 ### 1.2 Decisions
 
-| #   | Decision                                                                                               | Why                                                                                                                                                         |
-| --- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | The in-app agent reaches state **only** through `document.modelContext`                                | It sees exactly what Chrome's agent sees, and every call is traced                                                                                          |
-| D2  | **NgRx SignalStore**, plus two custom features: **`withWebMcpTools()`** and **`withAgentHistory()`**   | It is the standard for structured signal state, and is built on Angular signals. Agent capabilities become composable store features ("agent-ready stores") |
-| D3  | `HUMAN_APPROVAL_GATE` and `AGENT_CONFIG` tokens are owned by `mcp/` and implemented by `features/`     | `mcp/` stays a reusable platform with no Material and no feature imports                                                                                    |
-| D4  | `defineTool()` middleware                                                                              | Cross-cutting concerns live in one place, so each tool body is 10–20 lines                                                                                  |
-| D5  | Resolve all dependencies synchronously at the start of `execute`                                       | The injection context ends at the first `await`                                                                                                             |
-| D6  | Results are `{ content: [{ type: 'text', text: JSON }] }`                                              | MCP-compatible, and it matches Angular's form tool                                                                                                          |
-| D7  | Invalid input throws `ToolInputError`. A human rejection returns `status: 'rejected_by_human'`         | The model adapts to a rejection instead of failing                                                                                                          |
-| D8  | Undo is human-only; there is no undo tool                                                              | "The agent can't erase its own audit trail"                                                                                                                 |
-| D9  | Telemetry uses MCP JSON-RPC 2.0 framing                                                                | Familiar to the audience. WebMCP itself is an in-page API, and the talk says so                                                                             |
-| D10 | Live-only, BYOK                                                                                        | No mock or recorded fallback. Fakes exist only in `src/testing`                                                                                             |
-| D11 | Feature-owned state and tools (`features/dashboard/`)                                                  | State, UI and agent surface stay together                                                                                                                   |
-| D12 | The `/dashboard` parent route owns the domain providers; `lab` is a child route and `about` is outside | Leaving to `/about` unregisters the tools. The Lab keeps the store alive                                                                                    |
-| D13 | A deterministic seed (24 deals, `D-1001…D-1024`)                                                       | Acts, tests and evals share one known starting state                                                                                                        |
-| D14 | No `provideZonelessChangeDetection()`                                                                  | It's redundant since v21. A test asserts `globalThis.Zone === undefined`                                                                                    |
+| #   | Decision                                                                                                                                 | Why                                                                                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | The in-app agent reaches state **only** through `document.modelContext`                                                                  | It sees exactly what Chrome's agent sees, and every call is traced                                                                                          |
+| D2  | **NgRx SignalStore**, plus two custom features: **`withWebMcpTools()`** and **`withAgentHistory()`**                                     | It is the standard for structured signal state, and is built on Angular signals. Agent capabilities become composable store features ("agent-ready stores") |
+| D3  | `HUMAN_APPROVAL_GATE` and `AGENT_CONFIG` tokens are owned by `mcp/` and implemented by `features/`                                       | `mcp/` stays a reusable platform with no Material and no feature imports                                                                                    |
+| D4  | `defineTool()` middleware                                                                                                                | Cross-cutting concerns live in one place, so each tool body is 10–20 lines                                                                                  |
+| D5  | Resolve all dependencies synchronously at the start of `execute`                                                                         | The injection context ends at the first `await`                                                                                                             |
+| D6  | Results are `{ content: [{ type: 'text', text: JSON }] }`                                                                                | MCP-compatible, and it matches Angular's form tool                                                                                                          |
+| D7  | Invalid input and tool failures return an `isError` result carrying the message. A human rejection returns `status: 'rejected_by_human'` | Registries hide thrown errors behind a generic failure, so the model could not read a thrown `ToolInputError`. Returning it lets the model self-correct     |
+| D8  | Undo is human-only; there is no undo tool                                                                                                | "The agent can't undo its own changes. History is a bounded in-memory undo stack, not an immutable audit log"                                               |
+| D9  | Telemetry uses MCP JSON-RPC 2.0 framing                                                                                                  | Familiar to the audience. WebMCP itself is an in-page API, and the talk says so                                                                             |
+| D10 | Live-only, BYOK                                                                                                                          | No mock or recorded fallback. Fakes exist only in `src/testing`                                                                                             |
+| D11 | Feature-owned state and tools (`features/dashboard/`)                                                                                    | State, UI and agent surface stay together                                                                                                                   |
+| D12 | The `/dashboard` parent route owns the domain providers; `lab` is a child route and `about` is outside                                   | Leaving to `/about` unregisters the tools. The Lab keeps the store alive                                                                                    |
+| D13 | A deterministic seed (24 deals, `D-1001…D-1024`)                                                                                         | Acts, tests and evals share one known starting state                                                                                                        |
+| D14 | No `provideZonelessChangeDetection()`                                                                                                    | It's redundant since v21. A test asserts `globalThis.Zone === undefined`                                                                                    |
 
 ---
 
@@ -358,7 +363,7 @@ Inside `execute(args, { signal })`:
 
 1. Resolve the telemetry store, the gate (optional) and `CLOCK` synchronously.
 2. **Telemetry** opens a span.
-3. **Validation** runs `validateArgs()`. On failure it throws `ToolInputError` with field paths.
+3. **Validation** runs `validateArgs()`. On failure it builds a `ToolInputError` with field paths, which `defineTool` returns as an `isError` result (`toErrorResult`) instead of throwing.
 4. **Approval:** if `risk` requires it, await `gate.request(req, signal)`. **If no gate is provided, the call is rejected (fail-safe).**
 5. **Snapshot:** `snapshot.recordSnapshot()` runs after approval.
 6. **`run`**, then `toToolResult()`. Telemetry closes the span with latency and status.
@@ -369,7 +374,7 @@ Inside `execute(args, { signal })`:
 | -------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `getPipelineSummary` | `{}`                                                                                              | `readOnlyHint`                         | `{ kpis, byStage, byRegion, topDeals[5], generatedAt }`                                                    |
 | `searchDeals`        | `{ stages?, regions?, minValue?, maxValue?, minProbability?, stalledOnly?, query?, limit? 1–25 }` | `readOnlyHint`                         | `{ total, deals: [{ id, account, region, stage, netValue, discountPct, probability, lastActivityDays }] }` |
-| `getDealDetails`     | `{ dealId: ^D-\d{4}$ }`                                                                           | `readOnlyHint`, `untrustedContentHint` | the full `Deal`. An unknown ID → `ToolInputError`                                                          |
+| `getDealDetails`     | `{ dealId: ^D-\d{4}$ }`                                                                           | `readOnlyHint`, `untrustedContentHint` | the full `Deal`. An unknown ID → an `isError` result (`ToolInputError` text)                               |
 
 ### 4.2 ② Mutation tools: Acts 2 and 4 (`withWebMcpTools` on `DealsStore`)
 
@@ -451,7 +456,7 @@ type AgentEvent =
     };
 ```
 
-**`McpToolGateway`** (`@Service()`) provides `listTools()`, `callTool(name, args, signal)`, `waitForTool(name, ms)` and a `toolsVersion` signal. It emits the `tools/list`, `tools/call` and `notifications/tools/list_changed` packets.
+**`McpToolGateway`** (`@Service()`) provides async `listTools()`, `callTool(name, args, signal)`, `waitForTool(name, ms)`, and the `tools`, `toolsVersion`, `lastChange` and `discovery` (`loading` | `ready` | `error`) signals. It keeps the registry descriptors private (they hold a `Window`), executes by descriptor, decodes the serialized result, and applies a discovery read only if it is newer than the last applied one. It emits the `tools/list`, `tools/call` and `notifications/tools/list_changed` packets.
 
 **`GeminiAgent`** (lazy chunk):
 
@@ -519,7 +524,7 @@ interface WirePacket {
 | 7:00–9:30   | **3 · Signal Form** (🛠️) | "Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December."                 | openProposalDrawer → _toolchange_ → draftDealProposal ✗ → ✓         | A new tool appears, fields glow as they fill, and the agent fixes the start date                         |
 | 9:30–12:00  | **4 · Governance** (🛠️)  | "End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract."                      | applyBatchDiscount ⏸ Approve; terminateContract ⏸ Reject            | The agent pauses on a diff dialog and adapts. Then Undo rolls the chart back                             |
 | 12:00–14:00 | **5 · Wire + Race**      | Lab → Model Race (⚡ vs 🛠️): "Which three deals should I prioritise this week and why?"                     | read tools                                                          | Packets, then latency, tool calls, thinking tokens and $ side by side. Mention that 🧠 is one click away |
-| 14:00–15:00 | Close                    | —                                                                                                           | —                                                                   | The registration styles, `withWebMcpTools()`, and the audit trail                                        |
+| 14:00–15:00 | Close                    | —                                                                                                           | —                                                                   | The registration styles, `withWebMcpTools()`, and the change history                                     |
 
 ### 5.1 WebMCP feature notes per act
 
@@ -530,7 +535,7 @@ interface WirePacket {
   - Registration style ①, with `readOnlyHint` (and `untrustedContentHint` on `getDealDetails`).
   - `execute` runs in the route injector's injection context and calls `inject(DealsStore)`. It returns data derived from computed signals.
   - Arguments are validated by us, because Angular doesn't validate them.
-  - The agent uses `getTools()` and `executeTool()`.
+  - The agent discovers with `getTools()` and runs `executeTool(descriptor, …)`; the gateway holds the descriptors.
 - **Act 2:**
   - Registration style ②, `withWebMcpTools()` → `declareExperimentalWebMcpTool(tool, storeInjector)`, so the tools live as long as the store.
   - `consequentialHint` on the mutations.
@@ -1208,10 +1213,10 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
 
 - **Exported Symbols & Contracts:**
   - `src/app/mcp/registry/model-context.ts`:
-    - Types: `RegistryKind` (`'native' | 'polyfill' | 'shim'`), `ModelContextRegistry` (`registerTool(tool, { signal })`, `getTools()`, `executeTool(name, args, { signal })`, plus `EventTarget` for `toolchange`), `RegistryTool`, `RegistryToolInfo`, `RegistryToolClient`.
+    - Types: `RegistryKind` (`'native' | 'polyfill' | 'shim'`), `ModelContextRegistry` (`registerTool(tool, { signal }): Promise<void>`, `getTools(): Promise<RegisteredTool[]>`, `executeTool(tool, input, { signal }): Promise<string>`, plus `EventTarget` for `toolchange`), `RegistryTool`, `RegisteredTool` (adds `origin` and `window`), `RegistryToolInfo` (JSON-safe metadata for Gemini, telemetry and the inspector), `RegistryToolClient`.
     - `findModelContext(doc?)`: `document.modelContext ?? navigator.modelContext ?? null`. It swallows a throwing getter, which the polyfill can leave behind.
   - `src/app/mcp/registry/ensure-model-context.ts`: `ensureModelContext(doc?): Promise<RegistryKind>`. It tries native, then a dynamic `import('@mcp-b/webmcp-polyfill')` and `installWebMCP()`, then `RegistryShim`.
-  - `src/app/mcp/registry/registry-shim.ts`: `RegistryShim` (an `EventTarget` registry). It sorts `getTools()`, throws `Tool already registered: <name>` on a duplicate, unregisters on abort and fires `toolchange` on every change. `tools` is `protected`.
+  - `src/app/mcp/registry/registry-shim.ts`: `RegistryShim` (an `EventTarget` registry). It follows the client contract above: async sorted `getTools()` with descriptors, `executeTool(descriptor, …)` with a JSON-copied input, a serialized-string result, a generic failure for thrown errors and abort-aware rejection. A duplicate name rejects with `Tool already registered: <name>`. It unregisters on abort and fires `toolchange` on every change. `tools` is `protected`, and the constructor takes the `Document`.
   - `src/app/mcp/registry/registry-kind.ts`: `REGISTRY_KIND` (`InjectionToken<RegistryKind>`, default factory `'shim'`). `main.ts` provides the real value through `mergeApplicationConfig`. The toolbar chip in `app.html` shows it as `WebMCP: <kind>` (`data-testid="registry-chip"`, `data-kind`).
   - `src/app/mcp/schema/validate-args.ts`: `validateArgs(schema, value): ValidationIssue[]`, `formatIssues`, `JsonSchema`, `ValidationIssue {path, message}`. It supports type, required, `additionalProperties: false`, enum, minimum/maximum, minLength/maxLength, pattern, items, minItems/maxItems. Paths look like `updates[1].stage`, and a root-level issue has the path `''`.
   - `src/app/mcp/tooling/tool-errors.ts`: `ToolInputError(message, issues)` and `ToolInputError.fromIssues(toolName, issues)`. Its message is `Invalid input for <tool>: <path>: <msg>; …`.
@@ -1224,7 +1229,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - Rejection, from the human or from a missing gate, returns `{ status: 'rejected_by_human', note? }` as a normal result and closes the span as `rejected`. Errors rethrow and close the span as `error`.
     - Latency is measured with `CLOCK`.
   - `src/app/features/dashboard/tools/deal-context-tools.ts`: `DEAL_CONTEXT_TOOLS` (`getPipelineSummary`, `searchDeals`, `getDealDetails`), `DealRow`, `toDealRow(deal)`. The tools are wired in `app.routes.ts` as `provideExperimentalWebMcpTools(DEAL_CONTEXT_TOOLS)` in the `dashboard` route `providers`.
-  - `src/testing/fake-model-context.ts`: `FakeModelContext` (a `RegistryShim` plus `toolNames()` and `reset()`), `installFakeModelContext()`, `uninstallFakeModelContext()`.
+  - `src/testing/fake-model-context.ts`: `FakeModelContext` (a `RegistryShim` plus sync `toolNames()` and `toolInfos()`, `call(name, args, opts)` which goes through the contract path and returns the decoded envelope, `callOrThrow` which throws the `isError` text, and `reset()`), `installFakeModelContext()`, `uninstallFakeModelContext()`.
   - `src/testing/test-providers.ts`: `useFakeModelContext()` registers `beforeEach` and `afterEach` hooks and returns `{ current }`. `provideRegistryKind(kind)` is a provider helper.
 - **Gotchas / Technical Notes:**
   - **Gate status:** `npm run lint`, `npm run test:coverage` (263 tests; statements 98.2 %, branches 98.6 %, functions 95.6 %, lines 98.0 %) and `npm run build` all pass on each of the 3 commits. `main` is about 427 kB raw before compression.
@@ -1234,12 +1239,12 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Types:** the polyfill's `webmcp-types` augments `Document.modelContext`, so casting a `Document` straight to a holder type fails with TS2352. Cast through `unknown`, as `findModelContext` does. `WebMcpToolDescriptor` (the `ToolDescriptor` alias) is exported from `@angular/core`, and `execute` there takes `(args, client)`.
   - **Mocking the polyfill in specs:** use `vi.hoisted` plus `vi.mock('@mcp-b/webmcp-polyfill', () => ({ installWebMCP }))` (see `ensure-model-context.spec.ts`). Clear `document.modelContext` with `delete` between tests.
   - **D5 in practice:** `execute` is an `async` arrow, so everything before its first `await` still runs in the injection context. `inject(TOOL_TELEMETRY)`, `inject(HUMAN_APPROVAL_GATE, { optional: true })`, `inject(CLOCK)` and `def.deps()` all run there. A tool body that needs the store declares `deps: () => inject(DealsStore)` and receives it as `run`'s third argument. **Never call `inject()` inside `run`**. The spec "fails with NG0203" proves this.
-  - **Testing a tool through `defineTool`:** `runInInjectionContext(TestBed.inject(EnvironmentInjector), () => tool.execute(args, client))`. To test registration, use `provideExperimentalWebMcpTools(...)` in `TestBed` providers and call `registry.executeTool(name, args)` on the fake. A `TestBed` teardown destroys the injector, which aborts the registration signals.
+  - **Testing a tool through `defineTool`:** `runInInjectionContext(TestBed.inject(EnvironmentInjector), () => tool.execute(args, client))`. To test registration, use `provideExperimentalWebMcpTools(...)` in `TestBed` providers and call `registry.call(name, args)` on the fake (it resolves a descriptor, runs `executeTool` and decodes the string). A `TestBed` teardown destroys the injector, which aborts the registration signals.
   - **Route tests:** after navigating away from `/dashboard`, call `TestBed.tick()` before asserting that the tools are gone. `provideRouter(routes, withAutoCleanupInjectors())` is required.
   - **Tool output shapes:**
     - `getPipelineSummary.topDeals` holds the 5 largest **open** deals by net value, as `DealRow`s.
     - `searchDeals` calls `store.search`, which ignores the table filter. `total` is the full match count.
-    - An unknown `getDealDetails` ID throws `ToolInputError` with the message `Unknown deal <id>. Use searchDeals to find valid deal IDs.`
+    - A tool body throws `ToolInputError` and `defineTool` returns it as an `isError` result. An unknown `getDealDetails` ID gives the message `Unknown deal <id>. Use searchDeals to find valid deal IDs.`
   - **Annotations:** the three read tools set `readOnlyHint`, and `getDealDetails` also sets `untrustedContentHint`.
   - **Descriptions are first-draft** and will be tuned through the Lab (§5.2). `searchDeals` already points to `setDealFilter` for view changes, but that tool doesn't exist until Session 5.
   - **`ProposalsStore`** is still not in the `dashboard` providers (Session 7).
@@ -1309,7 +1314,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Seed gotcha for tests and the demo script:** `D-1006` (Iberia Telecom) already has a 10 % discount. Setting 10 % on the four EMEA negotiation deals changes only `D-1004` (5→10), `D-1005` and `D-1007`; `D-1006` is skipped as `already at 10%`, and the status is `partial` with `revenueImpact` -$77k. Session 2's note says "about $140k" for a 10 % discount on all four. That is the list-value arithmetic and ignores the existing discounts. Act 2's expected output should account for this.
   - **A snapshot is recorded after approval and before `run`**, even if `run` then changes nothing (for example all deals already at that discount). The history can therefore contain a no-op entry, and a rejected call never records one. If this is annoying in Session 6's history panel, skip the snapshot when no deal would change.
   - **Testing tools:**
-    - Provide `DealsStore` in `TestBed` with `useFakeModelContext()`, and call `registry.current.executeTool(name, args)`. The store registers its own tools on creation.
+    - Provide `DealsStore` in `TestBed` with `useFakeModelContext()`, and call `registry.current.call(name, args)`. The store registers its own tools on creation.
     - Provide `{ provide: MatSnackBar, useValue: { open } }` to assert the snackbar text.
     - For the gate, provide `{ provide: HUMAN_APPROVAL_GATE, useValue: { pending: signal(null), request } }`. With no provider, risky calls come back as `rejected_by_human`.
     - A store that is not `providedIn: 'root'` must be listed in `providers`, otherwise `TestBed.inject` throws NG0201.
@@ -1409,7 +1414,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - The dashboard route now exposes **8 tools** (the cold open's "8 tools"), plus `draftDealProposal` while the drawer is open.
   - `src/app/mcp/tooling/define-tool.ts`: new `isSelfInstrumented(toolName)`, which is true for any tool built by `defineTool` (it records its own `tools/call` span).
   - `src/app/mcp/agent/mcp-tool-gateway.ts`: `McpToolGateway` (`@Service()`, root).
-    - `listTools(): readonly RegistryToolInfo[]` records a `tools/list` packet with the tool names as the result.
+    - `listTools(): Promise<readonly RegistryToolInfo[]>` records a `tools/list` packet with the tool names as the result.
     - `callTool(name, args, signal?): Promise<ToolCallResult>` where `ToolCallResult = {name, ok, result, latencyMs}`. **It never throws.** `result` is the parsed JSON text (or the plain text), and a failure is `{error: message}`.
     - `ok` is false when the tool threw, when `isError` is set, or when the text starts with `FORM_FAILURE_PREFIX` (`'Form submission failed'`).
     - `waitForTool(name, timeoutMs, signal?): Promise<boolean>`.
@@ -1421,7 +1426,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Bundle budget (warning only):** the initial total is now 622.86 kB against the 500 kB warning budget (was 538.95 kB). `provideExperimentalWebMcpForms()` in `app.config.ts` pulls `@angular/forms/signals` into the initial chunk. The error limit is 1 MB. Moving that provider into the `dashboard` route `providers` would not help, because `app.routes.ts` is eager too.
   - **No double counting, as promised in Session 5's note:** the gateway records `tools/call` only for tools that are **not** `defineTool` tools, which in practice means the Signal Form tool (nothing else records a span for it). Session 8's agent should call `gateway.callTool`, and `stats.calls` will then count each call once.
   - **The tool appears after the first change detection**, not when the drawer is created: Angular registers the form tool from an `effect()` and then awaits `declareExperimentalWebMcpTool`. In tests, `fixture.detectChanges()` then `await vi.waitFor(() => expect(registry.current.toolNames()).toContain('draftDealProposal'))`. For the agent, `openProposalDrawer` returns before the tool exists, so the loop must refresh tools (`toolsVersion`) or `waitForTool('draftDealProposal', …)` before the next step. Its description and `nextTool` already tell the model that.
-  - **Gateway batching:** `toolchange` events are coalesced with `queueMicrotask`, so registering 7 tools gives one `list_changed` packet. In tests `await new Promise(r => queueMicrotask(r))` before reading `lastChange`. The gateway attaches to `document.modelContext` in its constructor (and re-attaches in `listTools`/`callTool` if the registry object changed), so install the registry before injecting it.
+  - **Gateway batching:** `toolchange` events are coalesced with `queueMicrotask`, so registering 7 tools gives one `list_changed` packet. Discovery is async now, so in tests `await vi.waitFor(...)` (or a macrotask) before reading `lastChange`; `DiscoveryTracker.idle()` (a tiny root service the gateway reports to) resolves when every started read has been applied, which `PresenterActions.reset()` uses to clear stragglers. The gateway attaches to `document.modelContext` in its constructor (and re-attaches in `listTools`/`callTool` if the registry object changed), so install the registry before injecting it.
   - **Form tool results are plain text, not JSON.** `execute` returns `"Form submitted successfully."` or `"Form submission failed:\n<path>: <message>"`. The gateway's `result` is that string. Failures use the field path, for example `startDate: Start date must be the 1st of a month (billing cycle), for example 2027-01-01`.
   - **`value.set(args)` replaces the whole model**, so the drawer's `saved` and `attempted` are `linkedSignal`s on the model, which reset on any change. An explicit `set` after the model changed sticks (the action does this on success).
   - **Agent glow vs typing:** the drawer diffs the model in an `effect()` and skips any field a person just edited (host `(input)`/`(change)` listeners read `data-field`, and the add/remove line item buttons do the same). A reseed through `openProposal(otherDealId)` while the drawer is open also glows the prefilled fields.
@@ -1429,7 +1434,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
   - **Form tool telemetry** is the gateway's packet only. A person clicking Save records no packet (correct, it is not a tool call), but the approval still records `hitl/*` packets through `ApprovalService`.
   - **Seed:** `Konkan Freight` is `D-1001` (closed-won, 5 % discount), which Act 3's prompt targets. Existing specs that count tools were updated: `context-tools-registration.spec.ts` now expects 8 names.
   - **Testing tips:**
-    - Provide `provideExperimentalWebMcpForms()`, `DealsStore`, `DashboardUiStore` and `ProposalsStore` in `TestBed`, plus `{ provide: HUMAN_APPROVAL_GATE, useValue: { pending: signal(null), request } }`. Drive the tool with `registry.current.executeTool('draftDealProposal', args)`, then `fixture.detectChanges(); await fixture.whenStable()`.
+    - Provide `provideExperimentalWebMcpForms()`, `DealsStore`, `DashboardUiStore` and `ProposalsStore` in `TestBed`, plus `{ provide: HUMAN_APPROVAL_GATE, useValue: { pending: signal(null), request } }`. Drive the tool with `registry.current.call('draftDealProposal', args)`, then `fixture.detectChanges(); await fixture.whenStable()`.
     - Fake timers are only needed for the 1.2 s glow expiry. Install them after the tool has registered.
     - `form()` needs an injection context, so wrap it in `TestBed.runInInjectionContext` for pure schema specs (see `proposal-form.spec.ts`).
   - **Blueprint deviations (non-functional):**

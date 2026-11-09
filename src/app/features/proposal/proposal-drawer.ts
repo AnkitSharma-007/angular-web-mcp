@@ -26,7 +26,9 @@ import {
   type ProposalModel,
 } from '../../core/models/proposal';
 import { formatCompactCurrency, roundMoney } from '../../core/util/money';
+import { findModelContext } from '../../mcp/registry/model-context';
 import { HUMAN_APPROVAL_GATE, type ApprovalRequest } from '../../mcp/tooling/approval-gate';
+import { ToolCancellation } from '../../mcp/tooling/tool-cancellation';
 import { requireApproval } from '../../mcp/tooling/with-human-approval';
 import { DashboardUiStore } from '../dashboard/data/dashboard-ui-store';
 import { DealsStore } from '../dashboard/data/deals-store';
@@ -84,6 +86,7 @@ export class ProposalDrawer {
   private readonly ui = inject(DashboardUiStore);
   private readonly proposals = inject(ProposalsStore);
   private readonly gate = inject(HUMAN_APPROVAL_GATE, { optional: true });
+  private readonly cancellation = inject(ToolCancellation);
   private readonly destroyRef = inject(DestroyRef);
   private readonly aborter = new AbortController();
 
@@ -194,7 +197,37 @@ export class ProposalDrawer {
       : {};
   }
 
+  /** One scope per submission: aborted by the drawer's destruction or by a cancelled tool call for this form. */
+  private beginSubmission(): { signal: AbortSignal; end: () => void } {
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const offGateway = this.cancellation.onCancel(PROPOSAL_TOOL_NAME, cancel);
+    const registry = findModelContext();
+    const onToolCancel = (event: Event) => {
+      if ((event as Event & { toolName?: string }).toolName === PROPOSAL_TOOL_NAME) {
+        cancel();
+      }
+    };
+    registry?.addEventListener('toolcancel', onToolCancel);
+    return {
+      signal: AbortSignal.any([this.aborter.signal, controller.signal]),
+      end: () => {
+        offGateway();
+        registry?.removeEventListener('toolcancel', onToolCancel);
+      },
+    };
+  }
+
   private async submitDraft(field: FieldTree<ProposalModel>) {
+    const submission = this.beginSubmission();
+    try {
+      return await this.submitWithin(field, submission.signal);
+    } finally {
+      submission.end();
+    }
+  }
+
+  private async submitWithin(field: FieldTree<ProposalModel>, signal: AbortSignal) {
     this.attempted.set(true);
     const proposal = this.model();
 
@@ -207,11 +240,14 @@ export class ProposalDrawer {
     }
 
     if (proposal.discountPct > DISCOUNT_APPROVAL_PCT) {
-      const rejection = await requireApproval(
-        this.gate,
-        this.approvalRequest(proposal),
-        this.aborter.signal,
-      );
+      const rejection = await requireApproval(this.gate, this.approvalRequest(proposal), signal);
+      if (signal.aborted) {
+        return {
+          kind: 'cancelled',
+          message: 'The request was cancelled before the draft was saved',
+          fieldTree: field.discountPct,
+        };
+      }
       if (rejection) {
         return {
           kind: 'approval_rejected',

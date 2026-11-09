@@ -1,5 +1,6 @@
 import { Component, DestroyRef, inject } from '@angular/core';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { AgentSessionStore } from '../../mcp/agent/agent-session-store';
 import { AgentConsole } from '../agent-console/agent-console';
 import { PresenterActions } from '../agent-console/presenter-actions';
 import { LayoutStore } from '../layout/layout-store';
@@ -33,7 +34,11 @@ export class DashboardShell {
 
   constructor() {
     const unregister = inject(PresenterActions).registerReset(() => this.resetDemo());
-    inject(DestroyRef).onDestroy(unregister);
+    const session = inject(AgentSessionStore);
+    inject(DestroyRef).onDestroy(() => {
+      unregister();
+      session.stop();
+    });
   }
 
   private resetDemo(): void {

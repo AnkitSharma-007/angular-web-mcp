@@ -95,9 +95,7 @@ describe('PresenterActions', () => {
       ),
     );
     TestBed.tick();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(telemetry.entities()).toEqual([]);
+    await vi.waitFor(() => expect(telemetry.entities()).toEqual([]));
   });
 
   it('stops calling a reset handler once it is unregistered', () => {

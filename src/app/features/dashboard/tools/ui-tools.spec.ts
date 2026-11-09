@@ -20,7 +20,7 @@ describe('openProposalDrawer', () => {
   it('is registered with the dashboard UI store', () => {
     setup();
     expect(registry.current.toolNames()).toContain('openProposalDrawer');
-    const info = registry.current.getTools().find((t) => t.name === 'openProposalDrawer');
+    const info = registry.current.toolInfos().find((t) => t.name === 'openProposalDrawer');
     expect(info?.annotations).toBeUndefined();
     expect(info?.inputSchema).toMatchObject({ required: ['dealId'], additionalProperties: false });
   });
@@ -28,7 +28,7 @@ describe('openProposalDrawer', () => {
   it('opens the drawer for the deal and points at the form tool', async () => {
     const ui = setup();
     const result = parse(
-      await registry.current.executeTool('openProposalDrawer', { dealId: 'D-1001' }),
+      await registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1001' }),
     );
     expect(ui.proposalOpen()).toBe(true);
     expect(ui.proposalDealId()).toBe('D-1001');
@@ -43,9 +43,9 @@ describe('openProposalDrawer', () => {
 
   it('reports when the drawer was already open and switches the deal', async () => {
     const ui = setup();
-    await registry.current.executeTool('openProposalDrawer', { dealId: 'D-1001' });
+    await registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1001' });
     const result = parse(
-      await registry.current.executeTool('openProposalDrawer', { dealId: 'D-1002' }),
+      await registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1002' }),
     );
     expect(result['alreadyOpen']).toBe(true);
     expect(ui.proposalDealId()).toBe('D-1002');
@@ -54,7 +54,7 @@ describe('openProposalDrawer', () => {
   it('rejects an unknown deal without opening anything', async () => {
     const ui = setup();
     await expect(
-      registry.current.executeTool('openProposalDrawer', { dealId: 'D-9999' }),
+      registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-9999' }),
     ).rejects.toThrow(/Unknown deal D-9999/);
     expect(ui.proposalOpen()).toBe(false);
   });
@@ -62,17 +62,17 @@ describe('openProposalDrawer', () => {
   it('rejects a malformed deal ID and extra arguments', async () => {
     setup();
     await expect(
-      registry.current.executeTool('openProposalDrawer', { dealId: 'nope' }),
+      registry.current.callOrThrow('openProposalDrawer', { dealId: 'nope' }),
     ).rejects.toThrow(/Invalid input/);
     await expect(
-      registry.current.executeTool('openProposalDrawer', { dealId: 'D-1001', extra: 1 }),
+      registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1001', extra: 1 }),
     ).rejects.toThrow(/Invalid input/);
   });
 
   it('records one tools/call packet for the call, not two', async () => {
     setup();
     const telemetry = TestBed.inject(WireTelemetryStore);
-    await registry.current.executeTool('openProposalDrawer', { dealId: 'D-1001' });
+    await registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1001' });
     const calls = telemetry.entities().filter((p) => p.method === 'tools/call');
     expect(calls).toHaveLength(1);
     expect(calls[0]?.status).toBe('ok');
@@ -80,7 +80,7 @@ describe('openProposalDrawer', () => {
 
   it('forgets the deal when the drawer closes', async () => {
     const ui = setup();
-    await registry.current.executeTool('openProposalDrawer', { dealId: 'D-1001' });
+    await registry.current.callOrThrow('openProposalDrawer', { dealId: 'D-1001' });
     ui.closeProposal();
     expect(ui.proposalOpen()).toBe(false);
     expect(ui.proposalDealId()).toBeNull();

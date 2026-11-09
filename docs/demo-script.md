@@ -5,14 +5,14 @@ The arc comes from [§5 of the blueprint](architecture-blueprint.md#5-live-demo-
 
 ## Controls on stage
 
-| Key / control           | What it does                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| `1` `2` `3` `4`         | Fill the matching act prompt into the console and open it. Press **Enter** to run it          |
-| Clicking a chip         | Runs that act's prompt at once, on the chip's model                                           |
-| `` ` ``                 | Open or close the wire inspector                                                              |
-| `Shift+R`               | Reset: the seed deals, empty history, empty packets, empty transcript, proposal drawer closed |
-| **Stop** in the console | Aborts the agent, any open approval (it counts as a rejection) and the request in flight      |
-| `Esc`                   | Closes the wire inspector or the proposal drawer, while focus is inside it                    |
+| Key / control           | What it does                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `1` `2` `3` `4`         | Fill the matching act prompt into the console, open it and focus the composer. Press **Enter** to run it |
+| Clicking a chip         | Runs that act's prompt at once, on the chip's model                                                      |
+| `` ` ``                 | Open or close the wire inspector                                                                         |
+| `Shift+R`               | Reset: the seed deals, empty history, empty packets, empty transcript, proposal drawer closed            |
+| **Stop** in the console | Aborts the agent, any open approval (it counts as a rejection) and the request in flight                 |
+| `Esc`                   | Closes the wire inspector or the proposal drawer, while focus is inside it                               |
 
 Hotkeys are ignored while focus is in a text field. After typing in the console, click the page background (or press `Tab` away) before using `1`–`4`.
 
@@ -20,15 +20,15 @@ Models: **⚡ Sprinter** `gemini-3.5-flash-lite` for Act 1, **🛠️ Operator**
 
 ## The arc
 
-| Time        | Beat                   | Do                                                          |
-| ----------- | ---------------------- | ----------------------------------------------------------- |
-| 0:00–1:30   | Cold open              | Inspector → Tools tab, then `/about` and back               |
-| 1:30–4:00   | Act 1 · Context ⚡     | `1`, Enter                                                  |
-| 4:00–7:00   | Act 2 · Multi-step 🛠️  | `2`, Enter                                                  |
-| 7:00–9:30   | Act 3 · Signal Form 🛠️ | `3`, Enter                                                  |
-| 9:30–12:00  | Act 4 · Governance 🛠️  | `4`, Enter, approve, reject, undo                           |
-| 12:00–14:00 | Act 5 · Wire + Race    | Lab → Model Race (⚡ vs 🛠️), then the inspector             |
-| 14:00–15:00 | Close                  | Code: registration styles, `withWebMcpTools()`, audit trail |
+| Time        | Beat                   | Do                                                             |
+| ----------- | ---------------------- | -------------------------------------------------------------- |
+| 0:00–1:30   | Cold open              | Inspector → Tools tab, then `/about` and back                  |
+| 1:30–4:00   | Act 1 · Context ⚡     | `1`, Enter                                                     |
+| 4:00–7:00   | Act 2 · Multi-step 🛠️  | `2`, Enter                                                     |
+| 7:00–9:30   | Act 3 · Signal Form 🛠️ | `3`, Enter                                                     |
+| 9:30–12:00  | Act 4 · Governance 🛠️  | `4`, Enter, approve, reject, undo                              |
+| 12:00–14:00 | Act 5 · Wire + Race    | Lab → Model Race (⚡ vs 🛠️), then the inspector                |
+| 14:00–15:00 | Close                  | Code: registration styles, `withWebMcpTools()`, change history |
 
 ### Cold open (0:00–1:30)
 
@@ -95,7 +95,7 @@ JSON-RPC framing in the inspector is a display convention. WebMCP itself is an i
 
 ### Close (14:00–15:00)
 
-Show the registration styles side by side: `provideExperimentalWebMcpTools` on a route, `withWebMcpTools()` on a store, and a Signal Form's `experimentalWebMcpTool`. Then the audit trail: **Agent changes** and the `human/undo` packet.
+Show the registration styles side by side: `provideExperimentalWebMcpTools` on a route, `withWebMcpTools()` on a store, and a Signal Form's `experimentalWebMcpTool`. Then the change history (a bounded undo stack, not a compliance log): **Agent changes** and the `human/undo` packet.
 
 ## Pre-flight
 

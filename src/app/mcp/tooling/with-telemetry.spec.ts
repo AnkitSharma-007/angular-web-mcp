@@ -72,7 +72,7 @@ describe('defineTool with the real telemetry store', () => {
     });
   });
 
-  it('records the error and rethrows it', async () => {
+  it('records the error and returns it as an error result', async () => {
     const store = setup();
     const tool = defineTool({
       name: 'boom',
@@ -82,7 +82,7 @@ describe('defineTool with the real telemetry store', () => {
         throw new Error('exploded');
       },
     });
-    await expect(run(tool, {})).rejects.toThrow('exploded');
+    expect(await run(tool, {})).toMatchObject({ isError: true });
     expect(store.entities()[0]).toMatchObject({
       status: 'error',
       envelope: { response: { error: { message: 'exploded' } } },
@@ -97,7 +97,7 @@ describe('defineTool with the real telemetry store', () => {
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
       run: () => null,
     });
-    await expect(run(strict, { extra: 1 })).rejects.toThrow('Invalid input');
+    expect(await run(strict, { extra: 1 })).toMatchObject({ isError: true });
 
     const risky = defineTool({
       name: 'risky',

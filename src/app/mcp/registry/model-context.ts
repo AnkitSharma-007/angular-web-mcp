@@ -19,18 +19,24 @@ export interface RegistryToolInfo {
   name: string;
   title?: string;
   description: string;
-  inputSchema?: JsonSchema;
-  annotations?: Record<string, unknown>;
+  inputSchema?: object;
+  annotations?: object;
+}
+
+/** Mirrors the WebMCP `RegisteredTool`: the opaque handle `executeTool` needs, with origin and window identity. */
+export interface RegisteredTool extends RegistryToolInfo {
+  origin: string;
+  window: Window;
 }
 
 export interface ModelContextRegistry extends EventTarget {
-  registerTool(tool: RegistryTool, options?: { signal?: AbortSignal }): void;
-  getTools(): readonly RegistryToolInfo[];
+  registerTool(tool: RegistryTool, options?: { signal?: AbortSignal }): Promise<void>;
+  getTools(): Promise<readonly RegisteredTool[]>;
   executeTool(
-    name: string,
-    args: Record<string, unknown>,
+    tool: RegisteredTool,
+    input?: object,
     options?: { signal?: AbortSignal },
-  ): Promise<unknown>;
+  ): Promise<string>;
 }
 
 export function findModelContext(doc: Document = document): ModelContextRegistry | null {

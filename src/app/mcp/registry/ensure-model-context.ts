@@ -14,7 +14,7 @@ export async function ensureModelContext(doc: Document = document): Promise<Regi
   }
 
   Object.defineProperty(doc, 'modelContext', {
-    value: new RegistryShim(),
+    value: new RegistryShim(doc),
     configurable: true,
     writable: true,
   });

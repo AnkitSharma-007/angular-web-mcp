@@ -133,6 +133,7 @@ export const EvalSessionStore = signalStore(
                 const outcome = await store._runner.run({
                   prompt,
                   model: spec.model,
+                  fromSeed: true,
                   ...(spec.approvals !== undefined && { approvals: spec.approvals }),
                   signal: controller.signal,
                 });

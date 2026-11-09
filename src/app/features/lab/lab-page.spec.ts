@@ -5,6 +5,7 @@ import { FakeApiError, FakeGenAI, fakeGenAiFactory } from '../../../testing/fake
 import { makeOutcome, passingOutcome, toolCall } from '../../../testing/run-outcomes';
 import { CLOCK } from '../../core/util/clock';
 import { GENAI_CLIENT_FACTORY } from '../../mcp/agent/gemini/genai-client';
+import { PresenterActions } from '../agent-console/presenter-actions';
 import { LayoutStore } from '../layout/layout-store';
 import { ApiKeyDialogLauncher } from '../settings/api-key-dialog-launcher';
 import { SettingsStore } from '../settings/settings-store';
@@ -217,6 +218,56 @@ describe('LabPage', () => {
       open();
       await vi.waitFor(() => expect(q('race-run')).not.toBeNull());
       expect(runner.run).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('leaving or resetting while a run is active', () => {
+    function hanging() {
+      const signals: AbortSignal[] = [];
+      const handler: Handler = (options) => {
+        if (options.signal) {
+          signals.push(options.signal);
+        }
+        return new Promise<RunOutcome>((resolve) =>
+          options.signal?.addEventListener('abort', () => resolve(passingOutcome('act1')), {
+            once: true,
+          }),
+        );
+      };
+      return { signals, handler };
+    }
+
+    it('aborts a race when the page is destroyed', async () => {
+      const { signals, handler } = hanging();
+      const { fixture, click } = setup(handler);
+      await fixture.whenStable();
+      await click('race-run');
+      await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
+      fixture.destroy();
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+    });
+
+    it('aborts an eval batch when the page is destroyed', async () => {
+      const { signals, handler } = hanging();
+      const { fixture, click } = setup(handler);
+      await fixture.whenStable();
+      await click('eval-run');
+      await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
+      fixture.destroy();
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+    });
+
+    it('aborts an active race and stops queueing more on a presenter reset', async () => {
+      const { signals, handler } = hanging();
+      const { fixture, click, runner } = setup(handler);
+      await fixture.whenStable();
+      await click('race-run');
+      await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
+      const started = runner.run.mock.calls.length;
+      TestBed.inject(PresenterActions).reset();
+      await vi.waitFor(() => expect(signals.every((signal) => signal.aborted)).toBe(true));
+      await fixture.whenStable();
+      expect(runner.run.mock.calls.length).toBe(started);
     });
   });
 

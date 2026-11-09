@@ -4,7 +4,6 @@ import { SEED_DEALS } from '../../../core/data/seed-deals';
 import { isOpen } from '../../../core/models/deal';
 import { CLOCK } from '../../../core/util/clock';
 import { netValue } from '../../../core/util/money';
-import { ToolInputError } from '../../../mcp/tooling/tool-errors';
 import { useFakeModelContext } from '../../../../testing/test-providers';
 import { DealsStore } from '../data/deals-store';
 import { DEAL_CONTEXT_TOOLS, type DealRow } from './deal-context-tools';
@@ -38,7 +37,7 @@ describe('deal context tools', () => {
   });
 
   async function call<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
-    const result = (await registry.current.executeTool(name, args)) as {
+    const result = (await registry.current.callOrThrow(name, args)) as {
       content: { text: string }[];
     };
     return JSON.parse(result.content[0]?.text ?? 'null') as T;
@@ -46,7 +45,7 @@ describe('deal context tools', () => {
 
   it('registers three read-only tools with the expected hints', () => {
     const contextNames = DEAL_CONTEXT_TOOLS.map((t) => t.name);
-    const tools = registry.current.getTools().filter((t) => contextNames.includes(t.name));
+    const tools = registry.current.toolInfos().filter((t) => contextNames.includes(t.name));
     expect(tools.map((t) => t.name)).toEqual([
       'getDealDetails',
       'getPipelineSummary',
@@ -58,7 +57,7 @@ describe('deal context tools', () => {
   });
 
   it('describes each tool with when to use it and strict schemas', () => {
-    for (const tool of registry.current.getTools()) {
+    for (const tool of registry.current.toolInfos()) {
       expect(tool.description.length).toBeGreaterThan(40);
       expect(tool.inputSchema?.additionalProperties).toBe(false);
     }
@@ -97,8 +96,8 @@ describe('deal context tools', () => {
     });
 
     it('rejects unexpected arguments', async () => {
-      await expect(call('getPipelineSummary', { verbose: true })).rejects.toBeInstanceOf(
-        ToolInputError,
+      await expect(call('getPipelineSummary', { verbose: true })).rejects.toThrow(
+        /Invalid input for getPipelineSummary/,
       );
     });
   });
@@ -182,7 +181,6 @@ describe('deal context tools', () => {
 
     it('explains how to recover from an unknown ID', async () => {
       const error = await call('getDealDetails', { dealId: 'D-9999' }).catch((e: unknown) => e);
-      expect(error).toBeInstanceOf(ToolInputError);
       expect((error as Error).message).toContain('Unknown deal D-9999');
       expect((error as Error).message).toContain('searchDeals');
     });

@@ -10,6 +10,8 @@ import {
   type ApprovalDecision,
   type ApprovalRequest,
 } from '../../mcp/tooling/approval-gate';
+import { McpToolGateway } from '../../mcp/agent/mcp-tool-gateway';
+import { ToolCancellation } from '../../mcp/tooling/tool-cancellation';
 import { DashboardShell } from '../dashboard/dashboard-shell';
 import { DashboardUiStore } from '../dashboard/data/dashboard-ui-store';
 import { DealsStore } from '../dashboard/data/deals-store';
@@ -65,7 +67,7 @@ describe('ProposalDrawer', () => {
     const input = (field: string) =>
       root.querySelector<HTMLInputElement>(`[data-field="${field}"]`)!;
     const run = async (args: Record<string, unknown>) => {
-      const result = textOf(await registry.current.executeTool(PROPOSAL_TOOL_NAME, args));
+      const result = textOf(await registry.current.call(PROPOSAL_TOOL_NAME, args));
       fixture.detectChanges();
       await fixture.whenStable();
       return result;
@@ -91,7 +93,7 @@ describe('ProposalDrawer', () => {
   describe('tool lifecycle', () => {
     it('registers draftDealProposal with every field required and unregisters on destroy', async () => {
       const { fixture } = await mount();
-      const tool = registry.current.getTools().find((t) => t.name === PROPOSAL_TOOL_NAME);
+      const tool = registry.current.toolInfos().find((t) => t.name === PROPOSAL_TOOL_NAME);
       expect(tool?.inputSchema).toMatchObject({
         type: 'object',
         additionalProperties: false,
@@ -248,6 +250,97 @@ describe('ProposalDrawer', () => {
       await vi.waitFor(() => expect(request).toHaveBeenCalled());
       fixture.destroy();
       expect(request.mock.calls[0]![1].aborted).toBe(true);
+    });
+  });
+
+  describe('cancellation', () => {
+    const RISKY = { ...VALID_ARGS, discountPct: 25 };
+
+    function waitingApproval() {
+      const seen: { signal?: AbortSignal } = {};
+      request.mockImplementation(
+        (_, signal) =>
+          new Promise<ApprovalDecision>((resolve) => {
+            seen.signal = signal;
+            signal.addEventListener('abort', () => resolve({ approved: false, note: 'aborted' }), {
+              once: true,
+            });
+          }),
+      );
+      return seen;
+    }
+
+    it('closes the pending approval and saves nothing when the in-app run is stopped', async () => {
+      const { fixture, proposals } = await mount();
+      const gateway = TestBed.inject(McpToolGateway);
+      await vi.waitFor(() =>
+        expect(gateway.tools().map((t) => t.name)).toContain(PROPOSAL_TOOL_NAME),
+      );
+      const seen = waitingApproval();
+      const controller = new AbortController();
+
+      const call = gateway.callTool(PROPOSAL_TOOL_NAME, RISKY, controller.signal);
+      await vi.waitFor(() => expect(seen.signal).toBeDefined());
+      controller.abort();
+
+      expect((await call).ok).toBe(false);
+      expect(seen.signal?.aborted).toBe(true);
+      await fixture.whenStable();
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('does not save when the approval is granted in the same turn as the cancellation', async () => {
+      const { run, proposals } = await mount();
+      const cancellation = TestBed.inject(ToolCancellation);
+      request.mockImplementation(async () => {
+        cancellation.notify(PROPOSAL_TOOL_NAME);
+        return { approved: true };
+      });
+
+      expect(await run(RISKY)).toContain('cancelled');
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('honours the platform toolcancel event for this tool only', async () => {
+      const { run, proposals } = await mount();
+      const seen = waitingApproval();
+      const pending = run(RISKY);
+      await vi.waitFor(() => expect(seen.signal).toBeDefined());
+
+      registry.current.dispatchEvent(Object.assign(new Event('toolcancel'), { toolName: 'other' }));
+      expect(seen.signal?.aborted).toBe(false);
+      registry.current.dispatchEvent(
+        Object.assign(new Event('toolcancel'), { toolName: PROPOSAL_TOOL_NAME }),
+      );
+
+      expect(await pending).toContain('Form submission failed');
+      expect(seen.signal?.aborted).toBe(true);
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('cancels a pending approval when the drawer is destroyed', async () => {
+      const { fixture, run, proposals } = await mount();
+      const seen = waitingApproval();
+      const pending = run(RISKY);
+      await vi.waitFor(() => expect(seen.signal).toBeDefined());
+
+      fixture.destroy();
+      await pending.catch(() => undefined);
+      expect(seen.signal?.aborted).toBe(true);
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('still accepts a valid submission after an earlier one was cancelled', async () => {
+      const { run, proposals } = await mount();
+      const cancellation = TestBed.inject(ToolCancellation);
+      request.mockImplementationOnce(async () => {
+        cancellation.notify(PROPOSAL_TOOL_NAME);
+        return { approved: true };
+      });
+      expect(await run(RISKY)).toContain('cancelled');
+
+      expect(await run(VALID_ARGS)).toBe('Form submitted successfully.');
+      expect(proposals.entities()).toHaveLength(1);
     });
   });
 

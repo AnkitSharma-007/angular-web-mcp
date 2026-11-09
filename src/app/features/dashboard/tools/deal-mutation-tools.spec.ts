@@ -56,7 +56,7 @@ describe('deal mutation tools', () => {
   }
 
   async function call<T = MutationOutput>(name: string, args: Record<string, unknown>) {
-    const result = (await registry.current.executeTool(name, args)) as {
+    const result = (await registry.current.callOrThrow(name, args)) as {
       content: { text: string }[];
     };
     return JSON.parse(result.content[0]?.text ?? 'null') as T;
@@ -68,7 +68,7 @@ describe('deal mutation tools', () => {
     beforeEach(() => setup(false));
 
     it('registers four tools with strict schemas and the right hints', () => {
-      const tools = registry.current.getTools();
+      const tools = registry.current.toolInfos();
       expect(tools.map((tool) => tool.name)).toEqual([
         'applyBatchDiscount',
         'setDealFilter',
@@ -414,6 +414,39 @@ describe('deal mutation tools', () => {
       expect(store.entityMap()['D-1002']).toMatchObject({ stage: 'closed-lost', probability: 0 });
     });
 
+    it('shows every move in a mixed batch, flagged first, and commits exactly those', async () => {
+      setup(true);
+      request.mockResolvedValue({ approved: true });
+      expect(smallOpen).toBeDefined();
+      const output = await call('updateDealStages', {
+        updates: [
+          { dealId: smallOpen?.id, stage: 'closed-won' },
+          { dealId: 'D-1002', stage: 'closed-lost' },
+          { dealId: 'D-1001', stage: 'closed-lost' },
+          { dealId: 'D-9999', stage: 'closed-lost' },
+        ],
+        reason: REASON,
+      });
+
+      const asked = request.mock.calls[0]?.[0];
+      expect(asked?.summary).toBe('Mark 1 large deal as closed-lost, and apply 1 other stage move');
+      expect(asked?.diff?.map((row) => row.label)).toEqual([
+        expect.stringContaining('D-1002'),
+        expect.stringContaining(smallOpen?.id ?? ''),
+      ]);
+      expect(asked?.diff?.[0]).toMatchObject({ before: 'Negotiation', after: 'Closed Lost' });
+      expect(asked?.diff?.[0]?.note).toContain('Probability set to 0%');
+      expect(asked?.diff?.[1]).toMatchObject({ after: 'Closed Won' });
+      expect(asked?.diff?.[1]?.note).toContain('contract is activated');
+
+      const committed = (output.moved ?? []).map((move) => move.id).sort();
+      expect(committed).toEqual(
+        [...(asked?.diff ?? []).map((row) => /\((D-\d+)\)/.exec(row.label)?.[1] ?? '')].sort(),
+      );
+      expect(output.skipped.map((entry) => entry.id).sort()).toEqual(['D-1001', 'D-9999']);
+      expect(store.entityMap()['D-1001']?.stage).toBe('closed-won');
+    });
+
     it('does not need approval for a small deal or a non-lost stage', async () => {
       setup(true);
       expect(smallOpen).toBeDefined();
@@ -584,7 +617,7 @@ describe('deal mutation tools', () => {
       await expect(call('terminateContract', { dealId: 'x', reason: ARGS.reason })).rejects.toThrow(
         'dealId',
       );
-      const tool = registry.current.getTools().find(({ name }) => name === 'terminateContract');
+      const tool = registry.current.toolInfos().find(({ name }) => name === 'terminateContract');
       expect(tool?.annotations?.['consequentialHint']).toBe(true);
     });
   });
@@ -606,7 +639,7 @@ describe('deal mutation tools', () => {
       ]);
     });
 
-    it('lists each large deal that would be closed lost with its current stage', async () => {
+    it('lists each large deal that would be closed lost with its current stage and effects', async () => {
       setup(true);
       request.mockResolvedValue({ approved: false });
       await call('updateDealStages', {
@@ -619,7 +652,7 @@ describe('deal mutation tools', () => {
           field: 'Stage',
           before: 'Negotiation',
           after: 'Closed Lost',
-          note: '$420k net value',
+          note: '$420k net value. Probability set to 0%',
         },
       ]);
     });

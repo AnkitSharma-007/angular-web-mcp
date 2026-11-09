@@ -116,7 +116,7 @@ const id = store.recordSnapshot('10% discount on 3 deals'); // before the change
 store.undoTo(id); // restores the state from before that change
 ```
 
-It adds `history`, `canUndo`, `lastEntry`, `recordSnapshot()`, `undo()`, `undoTo()` and `clearHistory()` to any SignalStore. Nothing exposes undo as a tool, so an agent can't erase its own audit trail.
+It adds `history`, `canUndo`, `lastEntry`, `recordSnapshot()`, `undo()`, `undoTo()` and `clearHistory()` to any SignalStore. Nothing exposes undo as a tool, so an agent can't roll back or hide its own changes. The history is an in-memory stack of 20 entries for people to undo with, not an immutable audit log: the reason an agent gave lives in the wire log, which is bounded and clearable.
 
 ### `defineTool`: one wrapper for the cross-cutting parts
 
