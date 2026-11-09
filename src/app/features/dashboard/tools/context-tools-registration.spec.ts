@@ -8,6 +8,7 @@ const NAMES = [
   'applyBatchDiscount',
   'getDealDetails',
   'getPipelineSummary',
+  'openProposalDrawer',
   'searchDeals',
   'setDealFilter',
   'terminateContract',
@@ -28,7 +29,7 @@ describe('dashboard tools route-scoped registration', () => {
     document.documentElement.classList.remove('dark');
   });
 
-  it('exposes the seven dashboard tools on /dashboard and none on /about', async () => {
+  it('exposes the eight dashboard tools on /dashboard and none on /about', async () => {
     const harness = await RouterTestingHarness.create();
     expect(registry.current.toolNames()).toEqual([]);
 

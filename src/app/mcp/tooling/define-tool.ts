@@ -30,12 +30,20 @@ export interface ToolResult {
   content: { type: 'text'; text: string }[];
 }
 
+const INSTRUMENTED = new Set<string>();
+
+/** True for tools built by defineTool, which record their own telemetry span. */
+export function isSelfInstrumented(toolName: string): boolean {
+  return INSTRUMENTED.has(toolName);
+}
+
 export function toToolResult(value: unknown): ToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value ?? null) }] };
 }
 
 /** Wraps a tool body in telemetry, validation, human approval and snapshot middleware. */
 export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDescriptor {
+  INSTRUMENTED.add(def.name);
   return {
     name: def.name,
     ...(def.title !== undefined && { title: def.title }),

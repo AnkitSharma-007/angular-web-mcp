@@ -1,6 +1,16 @@
 import { inject, linkedSignal } from '@angular/core';
-import { patchState, signalStore, withLinkedState, withMethods, withState } from '@ngrx/signals';
+import {
+  patchState,
+  signalStore,
+  withFeature,
+  withLinkedState,
+  withMethods,
+  withProps,
+  withState,
+} from '@ngrx/signals';
 import type { Deal } from '../../../core/models/deal';
+import { withWebMcpTools } from '../../../mcp/store-features/with-webmcp-tools';
+import { dashboardUiTools } from '../tools/ui-tools';
 import { DealsStore } from './deals-store';
 
 export const DashboardUiStore = signalStore(
@@ -8,9 +18,10 @@ export const DashboardUiStore = signalStore(
     proposalOpen: false,
     proposalDealId: null,
   }),
-  withLinkedState(() => ({
+  withProps(() => ({ _deals: inject(DealsStore) })),
+  withLinkedState(({ _deals }) => ({
     selectedDealId: linkedSignal<readonly Deal[], string | null>({
-      source: inject(DealsStore).filteredDeals,
+      source: _deals.filteredDeals,
       computation: (visible, previous) =>
         previous && visible.some((deal) => deal.id === previous.value) ? previous.value : null,
     }),
@@ -29,4 +40,5 @@ export const DashboardUiStore = signalStore(
       patchState(store, { proposalOpen: false, proposalDealId: null });
     },
   })),
+  withFeature((store) => withWebMcpTools(() => dashboardUiTools(store, store._deals))),
 );
