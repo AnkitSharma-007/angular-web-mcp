@@ -1382,3 +1382,59 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - Commit 6.2 added no specs of its own beyond updating the two registration specs, and 6.3 added all the scenarios, plus `approval-flow.spec.ts` (the real service, dialog and tools together) and two route assertions in `dashboard-routes.spec.ts`.
 - **Ready for Session 7:**
   - **Signal Form Tool (Act 3).** It starts with the first commit in the Session 7 block. `ProposalsStore` still needs adding to the `dashboard` route `providers`, and `openProposalDrawer` should call `DashboardUiStore.openProposal()`. The `submission.action` approval path for discounts over 15 % can reuse `HUMAN_APPROVAL_GATE` and `ApprovalRequest.diff`/`policy`.
+
+## Handoff Note: Session 7 Completed
+
+- **Exported Symbols & Contracts:**
+  - `src/app/core/models/proposal.ts`:
+    - `ProposalModel`, `ProposalKey`, `ProposalDraft` (`ProposalModel` + `id`, `savedAt`), `ProposalSeed`.
+    - `PRODUCT_TIERS` / `ProductTier`, `PROPOSAL_KEYS`, and the limits `SEATS_MIN`/`SEATS_MAX` (1/5000), `TERM_MIN_MONTHS`/`TERM_MAX_MONTHS` (6/60), `PROPOSAL_DISCOUNT_MAX` (40), `STARTER_SEAT_LIMIT` (1000).
+    - `createProposalModel(seed?)` (no nulls, non-empty `lineItems`), `isIsoDate`, `isBillingDate` (ISO date on the 1st).
+  - `src/app/features/proposal/proposal-form.ts`: `PROPOSAL_TOOL_NAME` (`'draftDealProposal'`), `PROPOSAL_TOOL_DESCRIPTION` (lists tiers, ISO format, the 1st-of-month rule and the 15 % approval) and `proposalSchema(dealExists): SchemaFn<ProposalModel>`.
+  - `src/app/features/proposal/proposals-store.ts`: `ProposalsStore` (`withEntities<ProposalDraft>`), computed `latest`, and `saveDraft(model): ProposalDraft` (ids `P-0001`…, `savedAt` from `CLOCK`). It is in the `dashboard` route `providers`.
+  - `src/app/features/proposal/proposal-drawer.ts` / `.html`: `ProposalDrawer` (`<app-proposal-drawer />`) and `AGENT_GLOW_MS` (1200).
+    - It is rendered by `DashboardShell` inside `@if (ui.proposalOpen())`.
+    - `form(model, proposalSchema(...), { name: 'proposal', experimentalWebMcpTool: {name, description, annotations: {consequentialHint: true}}, submission })`.
+    - `data-testid`: `banner`, `saved`, `problems`, `save`, `close`, `add-line-item`, `remove-line-item`. Inputs carry `data-field="<key>"`.
+  - `src/app/features/proposal/field-errors.ts`: `FieldErrors` (`<app-field-errors [field]="form.x" />`), which shows a field's errors once it is touched.
+  - `src/app/app.config.ts`: `provideExperimentalWebMcpForms()` is added to the app providers.
+  - `src/app/features/dashboard/data/dashboard-ui-store.ts`:
+    - New state `proposalDealId: string | null`.
+    - `openProposal(dealId?)` (keeps the previous ID when none is given) and `closeProposal()` (clears the ID).
+    - The store now has a private `_deals: DealsStore` prop and registers the UI tools through `withWebMcpTools`.
+  - `src/app/features/dashboard/tools/ui-tools.ts`: `dashboardUiTools(ui, deals)` returns **`openProposalDrawer`** `{dealId}`.
+    - Output is `{opened, alreadyOpen, dealId, account, nextTool: 'draftDealProposal'}`.
+    - An unknown ID throws `ToolInputError`.
+    - It is not `consequentialHint` (view only), has no `reason` and records no snapshot.
+    - The dashboard route now exposes **8 tools** (the cold open's "8 tools"), plus `draftDealProposal` while the drawer is open.
+  - `src/app/mcp/tooling/define-tool.ts`: new `isSelfInstrumented(toolName)`, which is true for any tool built by `defineTool` (it records its own `tools/call` span).
+  - `src/app/mcp/agent/mcp-tool-gateway.ts`: `McpToolGateway` (`@Service()`, root).
+    - `listTools(): readonly RegistryToolInfo[]` records a `tools/list` packet with the tool names as the result.
+    - `callTool(name, args, signal?): Promise<ToolCallResult>` where `ToolCallResult = {name, ok, result, latencyMs}`. **It never throws.** `result` is the parsed JSON text (or the plain text), and a failure is `{error: message}`.
+    - `ok` is false when the tool threw, when `isError` is set, or when the text starts with `FORM_FAILURE_PREFIX` (`'Form submission failed'`).
+    - `waitForTool(name, timeoutMs, signal?): Promise<boolean>`.
+    - Signals: `toolsVersion` (+1 for every non-empty diff), `tools` and `lastChange` (`{added, removed, version}` or `null`).
+    - Also exports `diffTools(before, after)` and the types `ToolsDiff`, `ToolsChange`, `ToolCallResult`.
+- **Gotchas / Technical Notes:**
+  - **Gate status:** `npm run lint`, `npm run test:coverage` (483 tests; statements 98.84 %, branches 96.21 %, functions 97.45 %, lines 98.95 %) and `npm run build` pass on each of the 3 commits. Commit 7.1 had no new specs of its own (the existing 394 passed), and all the new specs are in 7.3.
+  - **Not verified in a real browser:** the 7.1 acceptance ("the Chrome inspector shows `draftDealProposal` while the drawer is open") was only checked against the fake registry. Run `npm start` with `chrome://flags/#enable-webmcp-testing` when convenient. The drawer's layout, the glow animation and the native `<input type="date">` were not looked at.
+  - **Bundle budget (warning only):** the initial total is now 622.86 kB against the 500 kB warning budget (was 538.95 kB). `provideExperimentalWebMcpForms()` in `app.config.ts` pulls `@angular/forms/signals` into the initial chunk. The error limit is 1 MB. Moving that provider into the `dashboard` route `providers` would not help, because `app.routes.ts` is eager too.
+  - **No double counting, as promised in Session 5's note:** the gateway records `tools/call` only for tools that are **not** `defineTool` tools, which in practice means the Signal Form tool (nothing else records a span for it). Session 8's agent should call `gateway.callTool`, and `stats.calls` will then count each call once.
+  - **The tool appears after the first change detection**, not when the drawer is created: Angular registers the form tool from an `effect()` and then awaits `declareExperimentalWebMcpTool`. In tests, `fixture.detectChanges()` then `await vi.waitFor(() => expect(registry.current.toolNames()).toContain('draftDealProposal'))`. For the agent, `openProposalDrawer` returns before the tool exists, so the loop must refresh tools (`toolsVersion`) or `waitForTool('draftDealProposal', …)` before the next step. Its description and `nextTool` already tell the model that.
+  - **Gateway batching:** `toolchange` events are coalesced with `queueMicrotask`, so registering 7 tools gives one `list_changed` packet. In tests `await new Promise(r => queueMicrotask(r))` before reading `lastChange`. The gateway attaches to `document.modelContext` in its constructor (and re-attaches in `listTools`/`callTool` if the registry object changed), so install the registry before injecting it.
+  - **Form tool results are plain text, not JSON.** `execute` returns `"Form submitted successfully."` or `"Form submission failed:\n<path>: <message>"`. The gateway's `result` is that string. Failures use the field path, for example `startDate: Start date must be the 1st of a month (billing cycle), for example 2027-01-01`.
+  - **`value.set(args)` replaces the whole model**, so the drawer's `saved` and `attempted` are `linkedSignal`s on the model, which reset on any change. An explicit `set` after the model changed sticks (the action does this on success).
+  - **Agent glow vs typing:** the drawer diffs the model in an `effect()` and skips any field a person just edited (host `(input)`/`(change)` listeners read `data-field`, and the add/remove line item buttons do the same). A reseed through `openProposal(otherDealId)` while the drawer is open also glows the prefilled fields.
+  - **`submission.action` order:** the Starter seat limit is checked first (no dialog), then the gate for a discount above 15 % (`DISCOUNT_APPROVAL_PCT` from `risk-policy.ts`), then `saveDraft`. Both failures come back as errors on `seats` / `discountPct`, which is what the agent sees. A missing gate rejects (fail-safe, as in `defineTool`). The approval wait is aborted when the drawer is destroyed. The proposal approval uses `requireApproval` and the same `ApprovalRequest` shape, so the dialog shows a one-row diff (deal discount before/after).
+  - **Form tool telemetry** is the gateway's packet only. A person clicking Save records no packet (correct, it is not a tool call), but the approval still records `hitl/*` packets through `ApprovalService`.
+  - **Seed:** `Konkan Freight` is `D-1001` (closed-won, 5 % discount), which Act 3's prompt targets. Existing specs that count tools were updated: `context-tools-registration.spec.ts` now expects 8 names.
+  - **Testing tips:**
+    - Provide `provideExperimentalWebMcpForms()`, `DealsStore`, `DashboardUiStore` and `ProposalsStore` in `TestBed`, plus `{ provide: HUMAN_APPROVAL_GATE, useValue: { pending: signal(null), request } }`. Drive the tool with `registry.current.executeTool('draftDealProposal', args)`, then `fixture.detectChanges(); await fixture.whenStable()`.
+    - Fake timers are only needed for the 1.2 s glow expiry. Install them after the tool has registered.
+    - `form()` needs an injection context, so wrap it in `TestBed.runInInjectionContext` for pure schema specs (see `proposal-form.spec.ts`).
+  - **Blueprint deviations (non-functional):**
+    - `proposalDealId` and `openProposal(dealId?)` live in 7.1 (the drawer needs them), and the `openProposalDrawer` tool is in 7.2.
+    - The shell holds the drawer (as in 7.1), not `dashboard-page` as Session 3's note suggested.
+    - Added `field-errors`, `ui-tools.ts`, `core/models/proposal.ts` and `proposals-store.spec.ts`.
+- **Ready for Session 8:**
+  - **BYOK & Gemini Agent.** It starts with 8.1 in the Session 8 block of this file. `SettingsStore` should provide `WIRE_SECRETS` (Session 5's note), `AgentSessionStore` can derive `awaiting-approval` from `ApprovalService.pending` (Session 6's note) and should use `McpToolGateway` for every registry call (this note).
