@@ -102,6 +102,9 @@ export const AgentSessionStore = signalStore(
             ...(request.runId !== undefined && { runId: request.runId }),
           };
           for await (const event of agent.run(text, options)) {
+            if (controller.signal.aborted) {
+              break;
+            }
             if (event.type === 'error') {
               failed = true;
             }
@@ -122,8 +125,10 @@ export const AgentSessionStore = signalStore(
             message: error instanceof Error ? error.message : String(error),
           });
         } finally {
-          store._run.controller = null;
-          patchState(store, { phase: failed ? 'error' : 'idle' });
+          if (store._run.controller === controller) {
+            store._run.controller = null;
+            patchState(store, { phase: failed ? 'error' : 'idle' });
+          }
         }
       },
       stop(): void {
@@ -131,6 +136,7 @@ export const AgentSessionStore = signalStore(
       },
       clear(): void {
         store._run.controller?.abort();
+        store._run.controller = null;
         patchState(store, INITIAL);
       },
     };
