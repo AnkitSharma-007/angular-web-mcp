@@ -1,4 +1,4 @@
-import { Service, inject, signal } from '@angular/core';
+import { Injector, Service, afterNextRender, inject, signal } from '@angular/core';
 import { AgentSessionStore } from '../../mcp/agent/agent-session-store';
 import type { GeminiModelId } from '../../mcp/agent/gemini/gemini-models';
 import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
@@ -27,6 +27,7 @@ export class PresenterActions {
   private readonly layout = inject(LayoutStore);
   private readonly session = inject(AgentSessionStore);
   private readonly telemetry = inject(WireTelemetryStore);
+  private readonly injector = inject(Injector);
 
   private readonly draftState = signal<PromptDraft | null>(null);
   private readonly resetHandlers = new Set<() => void>();
@@ -51,9 +52,13 @@ export class PresenterActions {
 
   reset(): void {
     this.session.clear();
-    this.telemetry.clear();
     this.draftState.set(null);
     this.resetHandlers.forEach((handler) => handler());
+    this.telemetry.clear();
+    // Tools unregistered by the reset (the proposal drawer) report a list change after the next render.
+    afterNextRender(() => queueMicrotask(() => this.telemetry.clear()), {
+      injector: this.injector,
+    });
   }
 
   handleKey(event: KeyboardEvent): boolean {

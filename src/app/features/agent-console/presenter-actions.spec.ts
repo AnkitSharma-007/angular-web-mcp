@@ -84,6 +84,22 @@ describe('PresenterActions', () => {
     expect(telemetry.entities()).toEqual([]);
   });
 
+  it('drops a list-change packet that the reset causes right after the next render', async () => {
+    const { presenter } = setup();
+    const telemetry = TestBed.inject(WireTelemetryStore);
+    presenter.reset();
+    queueMicrotask(() =>
+      telemetry.record(
+        { channel: 'mcp', method: 'notifications/tools/list_changed' },
+        { status: 'ok' },
+      ),
+    );
+    TestBed.tick();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(telemetry.entities()).toEqual([]);
+  });
+
   it('stops calling a reset handler once it is unregistered', () => {
     const { presenter } = setup();
     const handler = vi.fn();
