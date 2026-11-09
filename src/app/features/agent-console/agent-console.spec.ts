@@ -7,6 +7,7 @@ import { GeminiAgent, type AgentRunOptions } from '../../mcp/agent/gemini/gemini
 import { DEFAULT_MODEL_ID } from '../../mcp/agent/gemini/gemini-models';
 import { GENAI_CLIENT_FACTORY } from '../../mcp/agent/gemini/genai-client';
 import { HUMAN_APPROVAL_GATE, type ApprovalRequest } from '../../mcp/tooling/approval-gate';
+import { IsolatedRunner } from '../lab/isolated-run';
 import { LayoutStore } from '../layout/layout-store';
 import { ApiKeyDialogLauncher } from '../settings/api-key-dialog-launcher';
 import { SettingsStore } from '../settings/settings-store';
@@ -58,6 +59,7 @@ function setup({
   sessionStorage.clear();
   const open = vi.fn().mockResolvedValue(true);
   const pending = signal<ApprovalRequest | null>(null);
+  const evalMode = signal(false);
   const runs: { prompt: string; options: AgentRunOptions }[] = [];
   const fake = new FakeGenAI();
   if (listError !== undefined) {
@@ -67,6 +69,7 @@ function setup({
     providers: [
       { provide: GENAI_CLIENT_FACTORY, useValue: fakeGenAiFactory(fake) },
       { provide: ApiKeyDialogLauncher, useValue: { open } },
+      { provide: IsolatedRunner, useValue: { evalMode } },
       { provide: HUMAN_APPROVAL_GATE, useValue: { pending, request: vi.fn() } },
       {
         provide: GeminiAgent,
@@ -105,7 +108,7 @@ function setup({
     q('prompt')?.dispatchEvent(event);
     return event;
   };
-  return { fixture, root, q, type, press, runs, open, pending, settings, fake };
+  return { fixture, root, q, type, press, runs, open, pending, settings, fake, evalMode };
 }
 
 const settle = async (fixture: { whenStable: () => Promise<unknown> }) => {
@@ -350,6 +353,20 @@ describe('AgentConsole', () => {
       await settle(fixture);
       expect(settings.model()).toBe(DEFAULT_MODEL_ID);
       expect(q('model-badge')?.getAttribute('data-model')).toBe(DEFAULT_MODEL_ID);
+    });
+  });
+
+  describe('during a lab run', () => {
+    it('is locked while eval mode is on and unlocks afterwards', async () => {
+      const { fixture, q, evalMode } = setup();
+      await fixture.whenStable();
+      evalMode.set(true);
+      await fixture.whenStable();
+      expect(q<HTMLTextAreaElement>('prompt')?.disabled).toBe(true);
+      expect(q<HTMLButtonElement>('chip-act1')?.disabled).toBe(true);
+      evalMode.set(false);
+      await fixture.whenStable();
+      expect(q<HTMLTextAreaElement>('prompt')?.disabled).toBe(false);
     });
   });
 

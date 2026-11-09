@@ -1,0 +1,214 @@
+<app-glass-card title="Act evals">
+  <p class="mb-3 mt-0 text-sm text-on-surface-variant">
+    Runs each act's prompts against the live API with scripted approvals, scores every run and
+    restores the dashboard after each one. Sign-off needs at least 9 of 10 passes per act.
+  </p>
+
+  <div class="mb-3 flex flex-wrap gap-6">
+    <fieldset class="m-0 flex flex-wrap gap-3 border-0 p-0">
+      <legend class="mb-1 p-0 text-sm font-medium text-on-surface">Acts</legend>
+      @for (act of acts; track act.id) {
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-on-surface">
+          <input
+            type="checkbox"
+            [attr.data-testid]="'eval-act-' + act.id"
+            [checked]="session.selectedActs().includes(act.id)"
+            [disabled]="session.running()"
+            (change)="session.toggleAct(act.id)"
+          />
+          {{ act.label }}
+        </label>
+      }
+    </fieldset>
+
+    <fieldset class="m-0 flex gap-3 border-0 p-0">
+      <legend class="mb-1 p-0 text-sm font-medium text-on-surface">Runs per act</legend>
+      @for (count of runOptions; track count) {
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-on-surface">
+          <input
+            type="radio"
+            name="runs-per-act"
+            [attr.data-testid]="'eval-runs-' + count"
+            [value]="count"
+            [checked]="session.runsPerAct() === count"
+            [disabled]="session.running()"
+            (change)="session.setRunsPerAct(count)"
+          />
+          {{ count }}
+        </label>
+      }
+    </fieldset>
+  </div>
+
+  <div class="mb-3 flex flex-wrap items-center gap-3">
+    @if (session.running()) {
+      <button mat-flat-button type="button" data-testid="eval-stop" (click)="session.stop()">
+        <mat-icon>stop_circle</mat-icon>
+        Stop
+      </button>
+    } @else {
+      <button
+        mat-flat-button
+        type="button"
+        data-testid="eval-run"
+        [disabled]="!session.canRun()"
+        (click)="run()"
+      >
+        <mat-icon>science</mat-icon>
+        Run evals
+      </button>
+    }
+    <span class="text-xs text-on-surface-variant" data-testid="eval-estimate">
+      Estimated cost ≈ {{ session.estimatedCostUsd() | currency: 'USD' : 'symbol' : '1.2-2' }}
+    </span>
+    @if (session.progress().total > 0) {
+      <span class="text-xs text-on-surface-variant" role="status" data-testid="eval-progress">
+        {{ session.progress().done }} of {{ session.progress().total }} runs
+      </span>
+    }
+  </div>
+
+  @if (session.rows().length > 0) {
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse text-left text-sm" data-testid="eval-table">
+        <caption class="sr-only">
+          Eval results per act
+        </caption>
+        <thead>
+          <tr class="text-xs text-on-surface-variant">
+            <th scope="col" class="py-1 pr-3 font-medium">Act</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Pass</th>
+            <th scope="col" class="py-1 pr-3 font-medium">p50</th>
+            <th scope="col" class="py-1 pr-3 font-medium">p90</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Tool calls</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Tokens</th>
+            <th scope="col" class="py-1 pr-3 font-medium">Cost</th>
+            <th scope="col" class="py-1 font-medium">Self-corrected</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of session.rows(); track row.summary.actId) {
+            <tr
+              class="border-t border-outline-variant"
+              [attr.data-testid]="'eval-row-' + row.summary.actId"
+            >
+              <th scope="row" class="py-1 pr-3 font-medium text-on-surface">{{ row.label }}</th>
+              <td class="py-1 pr-3" data-testid="eval-pass">
+                {{ row.summary.passes }}/{{ row.summary.runs }}
+                <span class="text-xs text-on-surface-variant">
+                  ({{ row.summary.passRate | percent: '1.0-0' }})
+                </span>
+                @if (row.before) {
+                  <span class="text-xs text-on-surface-variant">was {{ row.before }}</span>
+                }
+              </td>
+              <td class="py-1 pr-3">{{ row.summary.p50Ms / 1000 | number: '1.1-1' }} s</td>
+              <td class="py-1 pr-3" data-testid="eval-p90">
+                {{ row.summary.p90Ms / 1000 | number: '1.1-1' }} s
+              </td>
+              <td class="py-1 pr-3">{{ row.summary.medianToolCalls }}</td>
+              <td class="py-1 pr-3">{{ row.summary.medianTokens | number: '1.0-0' }}</td>
+              <td class="py-1 pr-3">
+                {{ row.summary.medianCostUsd | currency: 'USD' : 'symbol' : '1.4-4' }}
+              </td>
+              <td class="py-1" data-testid="eval-self-correction">
+                @if (row.summary.selfCorrectionRate !== null) {
+                  {{ row.summary.selfCorrectionRate | percent: '1.0-0' }}
+                } @else {
+                  –
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @for (row of session.rows(); track row.summary.actId) {
+      @if (row.failures.length > 0) {
+        <details class="mt-3" [attr.data-testid]="'eval-failures-' + row.summary.actId">
+          <summary class="cursor-pointer text-sm text-error">
+            {{ row.label }}: {{ row.failures.length }} failed
+            {{ row.failures.length === 1 ? 'run' : 'runs' }}
+          </summary>
+          <ul class="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+            @for (failed of row.failures; track failed.runId) {
+              <li class="rounded-xl border border-outline-variant p-2 text-sm">
+                <p class="m-0 text-xs text-on-surface-variant">
+                  Run {{ failed.index + 1 }} · {{ failed.prompt }}
+                </p>
+                <ul class="m-0 mt-1 pl-5 text-on-surface">
+                  @for (message of failed.failures; track $index) {
+                    <li>{{ message }}</li>
+                  }
+                </ul>
+                <button
+                  mat-button
+                  type="button"
+                  data-testid="eval-inspect"
+                  [attr.aria-label]="
+                    'Open packets for run ' + (failed.index + 1) + ' of ' + row.label
+                  "
+                  (click)="inspect(failed.runId)"
+                >
+                  Packets
+                </button>
+              </li>
+            }
+          </ul>
+        </details>
+      }
+    }
+
+    <div class="mt-4 flex flex-wrap items-end gap-3">
+      <div class="min-w-48 flex-1">
+        <label class="mb-1 block text-sm font-medium text-on-surface" for="eval-change">
+          What changed since the last run
+        </label>
+        <input
+          id="eval-change"
+          type="text"
+          autocomplete="off"
+          class="w-full rounded-xl border border-outline bg-transparent px-3 py-2 text-sm text-on-surface"
+          placeholder="baseline"
+          data-testid="eval-change"
+          [formField]="changeForm.change"
+        />
+      </div>
+      <button mat-stroked-button type="button" data-testid="eval-log-rows" (click)="buildLogRows()">
+        Build log rows
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        data-testid="eval-export"
+        [disabled]="session.running()"
+        (click)="exportJson()"
+      >
+        Export JSON
+      </button>
+      <button
+        mat-button
+        type="button"
+        data-testid="eval-clear"
+        [disabled]="session.running()"
+        (click)="session.clear()"
+      >
+        Clear
+      </button>
+    </div>
+
+    @if (logRows().length > 0) {
+      <div class="mt-3">
+        <pre
+          class="m-0 overflow-x-auto rounded-xl border border-outline-variant p-2 text-xs text-on-surface"
+          tabindex="0"
+          data-testid="eval-log-output"
+          >{{ logRows().join('\n') }}</pre>
+        <button mat-button type="button" data-testid="eval-copy" (click)="copyLogRows()">
+          {{ copied() ? 'Copied' : 'Copy rows' }}
+        </button>
+      </div>
+    }
+  }
+</app-glass-card>

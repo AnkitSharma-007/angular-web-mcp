@@ -25,4 +25,21 @@ describe('LayoutStore', () => {
     store.openConsole();
     expect(store.consoleOpen()).toBe(true);
   });
+
+  it('opens the inspector on a run and keeps it open when the filter is cleared', () => {
+    const store = TestBed.inject(LayoutStore);
+    expect(store.inspectorRunId()).toBeNull();
+    store.showRun('run-3');
+    expect(store.inspectorOpen()).toBe(true);
+    expect(store.inspectorRunId()).toBe('run-3');
+    store.showRun(null);
+    expect(store.inspectorOpen()).toBe(true);
+    expect(store.inspectorRunId()).toBeNull();
+  });
+
+  it('does not open a closed inspector when the run filter is cleared', () => {
+    const store = TestBed.inject(LayoutStore);
+    store.showRun(null);
+    expect(store.inspectorOpen()).toBe(false);
+  });
 });

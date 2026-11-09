@@ -1,10 +1,27 @@
-import { Component } from '@angular/core';
-import { GlassCard } from '../../shared/ui/glass-card/glass-card';
+import { Component, inject } from '@angular/core';
+import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
+import { ApiKeyDialogLauncher } from '../settings/api-key-dialog-launcher';
+import { SettingsStore } from '../settings/settings-store';
+import { EvalPanel } from './eval-panel';
+import { EvalSessionStore } from './eval-session';
+import { IsolatedRunner } from './isolated-run';
+import { ModelRaceStore } from './model-race';
+import { RacePanel } from './race-panel';
 
 @Component({
   selector: 'app-lab-page',
-  imports: [GlassCard],
+  imports: [EvalPanel, MatButton, MatIcon, RacePanel],
   templateUrl: './lab-page.html',
-  host: { class: 'block' },
+  providers: [ModelRaceStore, EvalSessionStore],
+  host: { class: 'flex flex-col gap-4' },
 })
-export class LabPage {}
+export class LabPage {
+  protected readonly runner = inject(IsolatedRunner);
+  protected readonly settings = inject(SettingsStore);
+  private readonly launcher = inject(ApiKeyDialogLauncher);
+
+  protected openKeyDialog(): void {
+    void this.launcher.open();
+  }
+}

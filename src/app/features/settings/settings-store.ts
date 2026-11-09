@@ -108,6 +108,9 @@ export const SettingsStore = signalStore(
       return verdict.ok ? 'valid' : verdict.reason;
     }),
   })),
+  withComputed(({ keyStatus }) => ({
+    canUseAgent: computed(() => keyStatus() !== 'missing' && keyStatus() !== 'invalid'),
+  })),
   withMethods((store) => ({
     saveKey(rawKey: string, remember: boolean): void {
       const key = rawKey.trim();

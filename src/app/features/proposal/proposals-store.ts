@@ -2,10 +2,12 @@ import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods } from '@ngrx/signals';
 import { addEntity, removeAllEntities, withEntities } from '@ngrx/signals/entities';
 import type { ProposalDraft, ProposalModel } from '../../core/models/proposal';
+import { withStateSnapshot } from '../../core/store-features/with-state-snapshot';
 import { CLOCK } from '../../core/util/clock';
 
 export const ProposalsStore = signalStore(
   withEntities<ProposalDraft>(),
+  withStateSnapshot(),
   withComputed(({ entities }) => ({
     latest: computed(() => entities().at(-1) ?? null),
   })),

@@ -140,6 +140,7 @@ export const WireTelemetryStore = signalStore(
     const clock = inject(CLOCK);
     const secrets = inject(WIRE_SECRETS);
     let sequence = 0;
+    let activeRunId: string | null = null;
 
     const redact = <T>(value: T): T => redactSecrets(value, secrets());
 
@@ -172,6 +173,7 @@ export const WireTelemetryStore = signalStore(
         return 0;
       }
       const id = ++sequence;
+      const runId = start.runId ?? activeRunId;
       const request: WireEnvelope['request'] = {
         jsonrpc: '2.0',
         ...(!start.method.startsWith(NOTIFICATION_PREFIX) && { id }),
@@ -185,7 +187,7 @@ export const WireTelemetryStore = signalStore(
           id,
           at: clock().getTime(),
           correlationId: start.correlationId ?? `c-${id}`,
-          ...(start.runId !== undefined && { runId: start.runId }),
+          ...(runId !== null && { runId }),
           channel: start.channel,
           method: start.method,
           envelope,
@@ -231,6 +233,9 @@ export const WireTelemetryStore = signalStore(
         const id = begin(start);
         end(id, outcome);
         return id;
+      },
+      setActiveRun(runId: string | null): void {
+        activeRunId = runId;
       },
       pause(): void {
         patchState(store, { paused: true });

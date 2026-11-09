@@ -16,6 +16,7 @@ import {
   findModel,
   type GeminiModelId,
 } from '../../mcp/agent/gemini/gemini-models';
+import { IsolatedRunner } from '../lab/isolated-run';
 import { LayoutStore } from '../layout/layout-store';
 import { ApiKeyDialogLauncher } from '../settings/api-key-dialog-launcher';
 import { SettingsStore } from '../settings/settings-store';
@@ -42,14 +43,14 @@ export class AgentConsole {
   protected readonly layout = inject(LayoutStore);
   private readonly presenter = inject(PresenterActions);
   private readonly launcher = inject(ApiKeyDialogLauncher);
+  private readonly runner = inject(IsolatedRunner);
 
   protected readonly chips = DEMO_PROMPTS;
 
-  protected readonly canRun = computed(() => {
-    const status = this.settings.keyStatus();
-    return status !== 'missing' && status !== 'invalid';
-  });
-  protected readonly locked = computed(() => !this.canRun() || this.session.running());
+  protected readonly canRun = this.settings.canUseAgent;
+  protected readonly locked = computed(
+    () => !this.canRun() || this.session.running() || this.runner.evalMode(),
+  );
   protected readonly statusLabel = computed(() => STATUS_LABELS[this.session.status()]);
 
   protected readonly model = linkedSignal<GeminiModelId, GeminiModelId>({

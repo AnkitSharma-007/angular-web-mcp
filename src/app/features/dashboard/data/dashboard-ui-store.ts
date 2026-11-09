@@ -9,6 +9,7 @@ import {
   withState,
 } from '@ngrx/signals';
 import type { Deal } from '../../../core/models/deal';
+import { withStateSnapshot } from '../../../core/store-features/with-state-snapshot';
 import { withWebMcpTools } from '../../../mcp/store-features/with-webmcp-tools';
 import { dashboardUiTools } from '../tools/ui-tools';
 import { DealsStore } from './deals-store';
@@ -40,5 +41,6 @@ export const DashboardUiStore = signalStore(
       patchState(store, { proposalOpen: false, proposalDealId: null });
     },
   })),
+  withStateSnapshot(),
   withFeature((store) => withWebMcpTools(() => dashboardUiTools(store, store._deals))),
 );

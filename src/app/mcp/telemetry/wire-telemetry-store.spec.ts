@@ -43,6 +43,32 @@ describe('percentile', () => {
 });
 
 describe('WireTelemetryStore', () => {
+  describe('active run', () => {
+    it('tags every packet opened while a run is active', () => {
+      const store = setup();
+      store.setActiveRun('run-7');
+      const first = store.begin(CALL);
+      const second = store.record({ channel: 'hitl', method: 'hitl/requested' }, { status: 'ok' });
+      expect(store.entityMap()[first]?.runId).toBe('run-7');
+      expect(store.entityMap()[second]?.runId).toBe('run-7');
+    });
+
+    it('stops tagging once the run is cleared', () => {
+      const store = setup();
+      store.setActiveRun('run-7');
+      store.setActiveRun(null);
+      const id = store.begin(CALL);
+      expect(store.entityMap()[id]?.runId).toBeUndefined();
+    });
+
+    it('lets an explicit run id win over the active one', () => {
+      const store = setup();
+      store.setActiveRun('run-7');
+      const id = store.begin({ ...CALL, runId: 'other' });
+      expect(store.entityMap()[id]?.runId).toBe('other');
+    });
+  });
+
   describe('begin/end', () => {
     it('opens a pending json-rpc request and closes it with a response and latency', () => {
       const store = setup();
