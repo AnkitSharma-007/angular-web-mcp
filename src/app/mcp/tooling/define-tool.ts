@@ -50,11 +50,8 @@ export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDe
 
       const startedAt = clock().getTime();
       const span = telemetry.begin(def.name, rawArgs);
-      const finish = (status: ToolStatus, error?: string) =>
-        span.end(status, {
-          latencyMs: clock().getTime() - startedAt,
-          ...(error !== undefined && { error }),
-        });
+      const finish = (status: ToolStatus, detail: { error?: string; result?: unknown } = {}) =>
+        span.end(status, { latencyMs: clock().getTime() - startedAt, ...detail });
 
       try {
         validateToolArgs(def.name, def.inputSchema, rawArgs);
@@ -66,20 +63,21 @@ export function defineTool<A, D = void>(def: ToolDefinition<A, D>): WebMcpToolDe
             ? await gate.request(request, ctx.signal)
             : { approved: false, note: 'no human approval gate is available' };
           if (!decision.approved) {
-            finish('rejected');
-            return toToolResult({
+            const rejection = {
               status: 'rejected_by_human',
               ...(decision.note !== undefined && { note: decision.note }),
-            });
+            };
+            finish('rejected', { result: rejection });
+            return toToolResult(rejection);
           }
         }
 
         def.snapshot?.(args);
         const value = await def.run(args, ctx, deps);
-        finish('ok');
+        finish('ok', { result: value ?? null });
         return toToolResult(value);
       } catch (error) {
-        finish('error', error instanceof Error ? error.message : String(error));
+        finish('error', { error: error instanceof Error ? error.message : String(error) });
         throw error;
       }
     },

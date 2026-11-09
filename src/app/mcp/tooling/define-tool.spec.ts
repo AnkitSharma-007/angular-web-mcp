@@ -104,7 +104,7 @@ describe('defineTool', () => {
     setup(undefined, () => new Date((tick += 50)));
     await invoke(tool(), { dealId: 'D-1001' });
     expect(begin).toHaveBeenCalledWith('probe', { dealId: 'D-1001' });
-    expect(end).toHaveBeenCalledWith('ok', { latencyMs: 50 });
+    expect(end).toHaveBeenCalledWith('ok', { latencyMs: 50, result: { ok: true } });
   });
 
   it('records failures from the body and rethrows them', async () => {
