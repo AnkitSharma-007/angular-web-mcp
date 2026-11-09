@@ -254,12 +254,12 @@ describe('GeminiAgent', () => {
       expect(fake.requests).toHaveLength(2);
     });
 
-    it('does nothing when aborted before it starts', async () => {
+    it('only settles when aborted before it starts', async () => {
       const { agent, fake } = setup([{ text: 'never' }]);
       const controller = new AbortController();
       controller.abort();
       const events = await collect(agent.run('hi', { signal: controller.signal }));
-      expect(events).toEqual([]);
+      expect(events).toEqual([expect.objectContaining({ type: 'done', partial: true })]);
       expect(fake.requests).toHaveLength(0);
     });
 
@@ -272,7 +272,7 @@ describe('GeminiAgent', () => {
       const { agent, fake } = setup([{ functionCalls: [{ name: 'slow' }] }, { text: 'late' }]);
       const events = await collect(agent.run('go', { signal: controller.signal }));
       expect(fake.requests).toHaveLength(1);
-      expect(events.map((e) => e.type)).toEqual(['tool-call']);
+      expect(events.map((e) => e.type)).toEqual(['tool-call', 'done']);
     });
 
     it('aborts a response that is still streaming and settles its packet', async () => {
@@ -281,10 +281,49 @@ describe('GeminiAgent', () => {
       const pending = collect(agent.run('go', { signal: controller.signal }));
       await vi.waitFor(() => expect(fake.requests).toHaveLength(1));
       controller.abort();
-      expect(await pending).toEqual([]);
+      expect(await pending).toEqual([expect.objectContaining({ type: 'done', partial: true })]);
       const packet = telemetry.entities().find((p) => p.method === 'generateContent');
       expect(packet).toMatchObject({ status: 'error' });
       expect(packet?.envelope.response?.error?.message).toBe('aborted');
+    });
+
+    describe('stalled requests', () => {
+      it('times out a stream that stops producing and settles its packet', async () => {
+        const { agent, telemetry } = setup([{ text: 'x', hold: new Promise(() => undefined) }]);
+        const events = await run(agent, 'go', { stallMs: 20 });
+        expect(events.map((e) => e.type)).toEqual(['error', 'done']);
+        expect(events[0]).toMatchObject({ kind: 'network' });
+        expect((events[0] as { message: string }).message).toContain('No response from Gemini');
+        const packet = telemetry.entities().find((p) => p.method === 'generateContent');
+        expect(packet?.envelope.response?.error?.message).toContain('No response');
+      });
+
+      it('times out a request that never connects', async () => {
+        const { agent } = setup([{ text: 'x', connectHold: new Promise(() => undefined) }]);
+        const events = await run(agent, 'go', { stallMs: 20 });
+        expect(events[0]).toMatchObject({ type: 'error', kind: 'network' });
+        expect(events.at(-1)).toMatchObject({ type: 'done', partial: true });
+      });
+
+      it('lets the user stop a stalled request immediately without reporting a timeout', async () => {
+        const controller = new AbortController();
+        const { agent, fake } = setup([{ text: 'x', hold: new Promise(() => undefined) }]);
+        const pending = collect(agent.run('go', { signal: controller.signal, stallMs: 60_000 }));
+        await vi.waitFor(() => expect(fake.requests).toHaveLength(1));
+        controller.abort();
+        expect((await pending).map((e) => e.type)).toEqual(['done']);
+      });
+
+      it('does not count a slow tool or approval against the stream deadline', async () => {
+        register(
+          'slowTool',
+          () => new Promise((resolve) => setTimeout(() => resolve(text({ ok: true })), 80)),
+        );
+        const { agent } = setup([{ functionCalls: [{ name: 'slowTool' }] }, { text: 'finished' }]);
+        const events = await run(agent, 'go', { stallMs: 30 });
+        expect(events.map((e) => e.type)).not.toContain('error');
+        expect(events.at(-1)).not.toHaveProperty('partial');
+      });
     });
 
     it('passes the abort signal to the pending human approval', async () => {
@@ -432,7 +471,9 @@ describe('GeminiAgent', () => {
     ])('maps %s to %s', async (_, error, kind) => {
       const { agent, telemetry } = setup([{ error }]);
       const events = await run(agent);
-      expect(events).toEqual([expect.objectContaining({ type: 'error', kind })]);
+      expect(events.map((e) => e.type)).toEqual(['error', 'done']);
+      expect(events[0]).toMatchObject({ kind });
+      expect(events[1]).toMatchObject({ partial: true });
       const packet = telemetry.entities().find((p) => p.method === 'generateContent');
       expect(packet?.status).toBe('error');
     });
@@ -450,7 +491,70 @@ describe('GeminiAgent', () => {
       const events = await collect(
         TestBed.inject(GeminiAgent).run('hi', { signal: new AbortController().signal }),
       );
-      expect(events).toEqual([expect.objectContaining({ type: 'error', kind: 'network' })]);
+      expect(events.map((e) => e.type)).toEqual(['error', 'done']);
+      expect(events[0]).toMatchObject({ kind: 'network' });
+    });
+
+    it('keeps the usage of already billed steps when a later step fails', async () => {
+      register('getPipelineSummary', () => text({ total: 24 }));
+      const { agent } = setup([
+        {
+          functionCalls: [{ name: 'getPipelineSummary' }],
+          usage: { promptTokenCount: 1000, candidatesTokenCount: 50, thoughtsTokenCount: 200 },
+        },
+        { error: new TypeError('Failed to fetch') },
+      ]);
+      const events = await run(agent);
+      const done = events.at(-1);
+      expect(events.map((e) => e.type)).toContain('error');
+      expect(done).toMatchObject({
+        type: 'done',
+        partial: true,
+        usage: { input: 1000, output: 50, thinking: 200 },
+      });
+      expect((done as { costUsd: number }).costUsd).toBeGreaterThan(0);
+    });
+
+    it('keeps the usage of a stream that fails after reporting it', async () => {
+      const { agent } = setup([
+        {
+          text: 'partial answer',
+          usage: { promptTokenCount: 400, candidatesTokenCount: 20 },
+          errorAfterStream: new TypeError('Failed to fetch'),
+        },
+      ]);
+      const events = await run(agent);
+      expect(events.at(-1)).toMatchObject({
+        type: 'done',
+        partial: true,
+        usage: { input: 400, output: 20, thinking: 0 },
+      });
+    });
+
+    it('keeps the usage of billed steps when stopped during a tool call', async () => {
+      const controller = new AbortController();
+      register('slow', () => {
+        controller.abort();
+        return text({ ok: true });
+      });
+      const { agent } = setup([
+        {
+          functionCalls: [{ name: 'slow' }],
+          usage: { promptTokenCount: 300, candidatesTokenCount: 30 },
+        },
+      ]);
+      const events = await collect(agent.run('go', { signal: controller.signal }));
+      expect(events.at(-1)).toMatchObject({
+        type: 'done',
+        partial: true,
+        usage: { input: 300, output: 30, thinking: 0 },
+      });
+    });
+
+    it('marks a normal run as complete, not partial', async () => {
+      const { agent } = setup([{ text: 'done' }]);
+      const events = await run(agent);
+      expect(events.at(-1)).not.toHaveProperty('partial');
     });
 
     it('unwraps the message of a JSON error body', async () => {

@@ -115,6 +115,59 @@ describe('AgentSessionStore', () => {
     expect(store.lastModel()).toBe('m');
   });
 
+  it('clears the previous run usage as soon as a new run starts', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const { store } = setup(async function* () {
+      if (first) {
+        first = false;
+        yield DONE;
+        return;
+      }
+      await hold;
+      yield DONE;
+    });
+    await store.run('one');
+    expect(store.lastUsage()).toEqual(USAGE);
+
+    const second = store.run('two');
+    await vi.waitFor(() => expect(store.status()).toBe('running'));
+    expect(store.lastUsage()).toBeNull();
+    expect(store.lastCostUsd()).toBe(0);
+    release();
+    await second;
+    expect(store.lastUsage()).toEqual(USAGE);
+  });
+
+  it('keeps the usage a stopped run reports in its final summary', async () => {
+    const partial: AgentEvent = {
+      type: 'done',
+      usage: { input: 700, output: 40, thinking: 90 },
+      costUsd: 0.003,
+      model: 'm',
+      ms: 50,
+      partial: true,
+    };
+    const { store } = setup(async function* (_, { signal }) {
+      yield { type: 'text-delta', text: 'working' };
+      if (!signal.aborted) {
+        await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+      }
+      yield { type: 'text-delta', text: 'late text after stop' };
+      yield partial;
+    });
+    const running = store.run('go');
+    await vi.waitFor(() => expect(store.status()).toBe('running'));
+    store.stop();
+    await running;
+
+    expect(store.lastUsage()).toEqual({ input: 700, output: 40, thinking: 90 });
+    expect(store.lastCostUsd()).toBe(0.003);
+    expect(kinds(store).at(-1)).toBe('done');
+    expect(JSON.stringify(store.transcript())).not.toContain('late text after stop');
+  });
+
   it('passes the model and run id to the agent', async () => {
     const { store, calls } = setup(events(DONE));
     await store.run('go', { model: 'gemini-4-argon', runId: 'r1' });

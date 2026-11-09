@@ -85,56 +85,58 @@ function isToolCall(packet: WirePacket): boolean {
   return packet.channel === 'mcp' && packet.method === 'tools/call';
 }
 
+export function computeWireStats(packets: readonly WirePacket[]): WireStats {
+  const calls = packets.filter(isToolCall);
+  const settled = calls.filter((packet) => packet.status !== 'pending');
+  const errors = settled.filter((packet) => packet.status === 'error').length;
+  const latencies = settled
+    .flatMap((packet) => (packet.latencyMs === undefined ? [] : [packet.latencyMs]))
+    .sort((a, b) => a - b);
+  return {
+    total: packets.length,
+    pending: packets.filter((packet) => packet.status === 'pending').length,
+    calls: calls.length,
+    errors,
+    rejected: settled.filter((packet) => packet.status === 'rejected').length,
+    errorRate: settled.length === 0 ? 0 : errors / settled.length,
+    p50: percentile(latencies, 50),
+    p95: percentile(latencies, 95),
+    totalBytes: packets.reduce((sum, packet) => sum + packet.bytes, 0),
+  };
+}
+
+export function computeModelStats(packets: readonly WirePacket[]): ModelStats[] {
+  const groups = new Map<string, WirePacket[]>();
+  for (const packet of packets) {
+    if (packet.channel === 'llm' && packet.model && packet.status !== 'pending') {
+      groups.set(packet.model, [...(groups.get(packet.model) ?? []), packet]);
+    }
+  }
+  return [...groups]
+    .map(([model, group]) => ({
+      model,
+      calls: group.length,
+      tokens: group.reduce<TokenUsage>(
+        (sum, { tokens }) => ({
+          input: sum.input + (tokens?.input ?? 0),
+          output: sum.output + (tokens?.output ?? 0),
+          thinking: sum.thinking + (tokens?.thinking ?? 0),
+        }),
+        { input: 0, output: 0, thinking: 0 },
+      ),
+      costUsd: group.reduce((sum, packet) => sum + (packet.costUsd ?? 0), 0),
+      avgLatencyMs: group.reduce((sum, packet) => sum + (packet.latencyMs ?? 0), 0) / group.length,
+    }))
+    .sort((a, b) => a.model.localeCompare(b.model));
+}
+
 export const WireTelemetryStore = signalStore(
   { providedIn: 'root' },
   withEntities<WirePacket>(),
   withState<TelemetryState>({ paused: false }),
   withComputed(({ entities }) => ({
-    stats: computed<WireStats>(() => {
-      const packets = entities();
-      const calls = packets.filter(isToolCall);
-      const settled = calls.filter((packet) => packet.status !== 'pending');
-      const errors = settled.filter((packet) => packet.status === 'error').length;
-      const latencies = settled
-        .flatMap((packet) => (packet.latencyMs === undefined ? [] : [packet.latencyMs]))
-        .sort((a, b) => a - b);
-      return {
-        total: packets.length,
-        pending: packets.filter((packet) => packet.status === 'pending').length,
-        calls: calls.length,
-        errors,
-        rejected: settled.filter((packet) => packet.status === 'rejected').length,
-        errorRate: settled.length === 0 ? 0 : errors / settled.length,
-        p50: percentile(latencies, 50),
-        p95: percentile(latencies, 95),
-        totalBytes: packets.reduce((sum, packet) => sum + packet.bytes, 0),
-      };
-    }),
-    byModel: computed<ModelStats[]>(() => {
-      const groups = new Map<string, WirePacket[]>();
-      for (const packet of entities()) {
-        if (packet.channel === 'llm' && packet.model && packet.status !== 'pending') {
-          groups.set(packet.model, [...(groups.get(packet.model) ?? []), packet]);
-        }
-      }
-      return [...groups]
-        .map(([model, packets]) => ({
-          model,
-          calls: packets.length,
-          tokens: packets.reduce<TokenUsage>(
-            (sum, { tokens }) => ({
-              input: sum.input + (tokens?.input ?? 0),
-              output: sum.output + (tokens?.output ?? 0),
-              thinking: sum.thinking + (tokens?.thinking ?? 0),
-            }),
-            { input: 0, output: 0, thinking: 0 },
-          ),
-          costUsd: packets.reduce((sum, packet) => sum + (packet.costUsd ?? 0), 0),
-          avgLatencyMs:
-            packets.reduce((sum, packet) => sum + (packet.latencyMs ?? 0), 0) / packets.length,
-        }))
-        .sort((a, b) => a.model.localeCompare(b.model));
-    }),
+    stats: computed<WireStats>(() => computeWireStats(entities())),
+    byModel: computed<ModelStats[]>(() => computeModelStats(entities())),
   })),
   withMethods((store) => {
     const clock = inject(CLOCK);
@@ -246,8 +248,12 @@ export const WireTelemetryStore = signalStore(
       clear(): void {
         patchState(store, removeAllEntities());
       },
-      exportJson(): string {
-        return JSON.stringify(redact(store.entities()), null, 2);
+      exportJson(runId: string | null = null): string {
+        if (runId === null) {
+          return JSON.stringify(redact(store.entities()), null, 2);
+        }
+        const packets = store.entities().filter((packet) => packet.runId === runId);
+        return JSON.stringify(redact({ runId, packets }), null, 2);
       },
     };
   }),

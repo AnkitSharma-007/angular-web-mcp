@@ -70,7 +70,10 @@ export interface IsolatedRunOptions {
   signal?: AbortSignal;
   maxSteps?: number;
   fromSeed?: boolean;
+  maxRunMs?: number;
 }
+
+export const RUN_BUDGET_MS = 120_000;
 
 const NO_USAGE: TokenUsage = { input: 0, output: 0, thinking: 0 };
 
@@ -128,7 +131,16 @@ export class IsolatedRunner {
     const runId = options.runId ?? `run-${++this.sequence}`;
     const epoch = this.epoch;
     const lifecycle = this.lifecycle.signal;
-    const signal = options.signal ? AbortSignal.any([options.signal, lifecycle]) : lifecycle;
+    const budget = new AbortController();
+    const budgetMs = options.maxRunMs ?? RUN_BUDGET_MS;
+    let timedOut = false;
+    const budgetTimer = setTimeout(() => {
+      timedOut = true;
+      budget.abort();
+    }, budgetMs);
+    const signal = AbortSignal.any(
+      options.signal ? [options.signal, lifecycle, budget.signal] : [lifecycle, budget.signal],
+    );
     const baseline = {
       deals: this.deals.snapshotState(),
       proposals: this.proposals.snapshotState(),
@@ -182,6 +194,12 @@ export class IsolatedRunner {
           message: error instanceof Error ? error.message : String(error),
         };
       }
+      if (timedOut && outcome.error === null) {
+        outcome.error = {
+          kind: 'unknown',
+          message: `The run exceeded its ${Math.round(budgetMs / 1000)}s budget and was stopped`,
+        };
+      }
       return {
         runId,
         prompt: options.prompt,
@@ -199,6 +217,7 @@ export class IsolatedRunner {
         proposals: this.viewProposals(),
       };
     } finally {
+      clearTimeout(budgetTimer);
       if (this.epoch === epoch) {
         this.deals.restoreState(baseline.deals);
         this.proposals.restoreState(baseline.proposals);

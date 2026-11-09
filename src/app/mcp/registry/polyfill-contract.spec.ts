@@ -37,6 +37,8 @@ describe('installed @mcp-b polyfill (independent contract check)', () => {
     if (originalWindow) {
       Object.defineProperty(globalThis, 'window', originalWindow);
     }
+    delete (Document.prototype as unknown as { modelContext?: unknown }).modelContext;
+    delete (globalThis as unknown as { ModelContext?: unknown }).ModelContext;
     delete (document as unknown as { modelContext?: unknown }).modelContext;
   });
 

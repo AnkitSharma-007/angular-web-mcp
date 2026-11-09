@@ -5,7 +5,11 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { McpToolGateway } from '../../mcp/agent/mcp-tool-gateway';
-import { WireTelemetryStore } from '../../mcp/telemetry/wire-telemetry-store';
+import {
+  WireTelemetryStore,
+  computeModelStats,
+  computeWireStats,
+} from '../../mcp/telemetry/wire-telemetry-store';
 import { StatTile } from '../../shared/ui/stat-tile/stat-tile';
 import { copyText } from '../lab/download-text';
 import { LayoutStore } from '../layout/layout-store';
@@ -87,9 +91,13 @@ export class WireInspector {
     describeTools(this.gateway.tools(), this.gateway.lastChange()),
   );
 
-  protected readonly stats = this.telemetry.stats;
-  protected readonly byModel = this.telemetry.byModel;
-  protected readonly wait = computed(() => humanWait(this.telemetry.entities()));
+  protected readonly stats = computed(() => computeWireStats(this.packets()));
+  protected readonly byModel = computed(() => computeModelStats(this.packets()));
+  protected readonly wait = computed(() => humanWait(this.packets()));
+  protected readonly scopeLabel = computed(() => {
+    const runId = this.layout.inspectorRunId();
+    return runId === null ? 'All retained traffic' : `Run ${runId} only`;
+  });
   protected readonly errorRate = computed(() => `${Math.round(this.stats().errorRate * 100)}%`);
 
   constructor() {
@@ -114,7 +122,7 @@ export class WireInspector {
   }
 
   protected async copy(): Promise<void> {
-    const copied = await copyText(this.telemetry.exportJson());
+    const copied = await copyText(this.telemetry.exportJson(this.layout.inspectorRunId()));
     this.copyStatus.set(copied ? 'copied' : 'failed');
     clearTimeout(this.copyTimer);
     this.copyTimer = setTimeout(() => this.copyStatus.set(null), COPY_FEEDBACK_MS);

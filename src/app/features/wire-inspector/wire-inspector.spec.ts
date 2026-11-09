@@ -293,6 +293,86 @@ describe('WireInspector', () => {
       expect(stats).toContain('1 decisions');
     });
 
+    describe('scoped to a run', () => {
+      function seedTwoRuns({ telemetry }: Rendered) {
+        const call = (runId: string, latencyMs: number, status: 'ok' | 'error') =>
+          telemetry.record(
+            { channel: 'mcp', method: 'tools/call', runId, params: { name: 'x', arguments: {} } },
+            { status, latencyMs },
+          );
+        call('run-a', 10, 'ok');
+        call('run-a', 30, 'ok');
+        call('run-b', 90, 'error');
+        for (const [runId, cost] of [
+          ['run-a', 0.001],
+          ['run-b', 0.01],
+        ] as const) {
+          telemetry.record(
+            { channel: 'llm', method: 'generateContent', model: 'gemini-3.8-flash', runId },
+            {
+              status: 'ok',
+              latencyMs: 100,
+              tokens: { input: 100, output: 10, thinking: 0 },
+              costUsd: cost,
+            },
+          );
+        }
+        telemetry.record(
+          { channel: 'hitl', method: 'hitl/resolved', runId: 'run-b' },
+          { status: 'ok', latencyMs: 4000 },
+        );
+      }
+
+      it('computes stats, model rows and human wait from the selected run only', async () => {
+        const view = await render();
+        seedTwoRuns(view);
+        view.layout.showRun('run-a');
+        await view.openTab('Stats');
+
+        const stats = view.q('stats')?.textContent ?? '';
+        expect(view.q('stats-scope')?.textContent).toContain('Run run-a only');
+        expect(stats).toContain('0%');
+        expect(stats).toContain('30 ms');
+        expect(stats).not.toContain('90 ms');
+        expect(stats).toContain('0 decisions');
+        expect(view.q('model-row-gemini-3.8-flash')?.textContent).toContain('0.001');
+      });
+
+      it('restores the global numbers when the filter is cleared', async () => {
+        const view = await render();
+        seedTwoRuns(view);
+        view.layout.showRun('run-a');
+        await view.openTab('Stats');
+        view.layout.showRun(null);
+        await view.fixture.whenStable();
+
+        const stats = view.q('stats')?.textContent ?? '';
+        expect(view.q('stats-scope')?.textContent).toContain('All retained traffic');
+        expect(stats).toContain('33%');
+        expect(stats).toContain('1 decisions');
+        expect(view.q('model-row-gemini-3.8-flash')?.textContent).toContain('0.011');
+      });
+
+      it('copies only the selected run, and says which run it is', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        vi.stubGlobal('navigator', { clipboard: { writeText } });
+        const view = await render();
+        seedTwoRuns(view);
+        view.layout.showRun('run-a');
+        await view.fixture.whenStable();
+        view.q<HTMLButtonElement>('copy')?.click();
+        await view.settle();
+
+        const exported = JSON.parse(writeText.mock.calls[0]?.[0] as string) as {
+          runId: string;
+          packets: { runId: string }[];
+        };
+        expect(exported.runId).toBe('run-a');
+        expect(exported.packets).toHaveLength(3);
+        expect(exported.packets.every((packet) => packet.runId === 'run-a')).toBe(true);
+      });
+    });
+
     it('breaks the model calls down by model', async () => {
       const view = await render();
       seedPackets(view);

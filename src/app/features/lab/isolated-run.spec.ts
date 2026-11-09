@@ -175,6 +175,49 @@ describe('IsolatedRunner', () => {
       expect(deals.entityMap()['D-1002']?.discountPct).toBe(12);
     });
 
+    it('stops a run that exceeds its budget and reports it as a failure', async () => {
+      vi.useFakeTimers();
+      try {
+        const { runner } = setup();
+        behaviour = async function* (_, { signal }) {
+          yield { type: 'text-delta', text: 'thinking' };
+          await untilAborted(signal);
+          yield { ...DONE, partial: true };
+        };
+        const pending = runner.run({ ...RUN, maxRunMs: 5_000 });
+        await vi.advanceTimersByTimeAsync(5_001);
+        const outcome = await pending;
+
+        expect(outcome.stopped).toBe(true);
+        expect(outcome.error?.message).toContain('exceeded its 5s budget');
+        expect(outcome.usage).toEqual(DONE.type === 'done' ? DONE.usage : undefined);
+        expect(runner.evalMode()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('lets the next queued run start after a run timed out', async () => {
+      vi.useFakeTimers();
+      try {
+        const { runner } = setup();
+        let calls = 0;
+        behaviour = async function* (_, { signal }) {
+          if (++calls === 1) {
+            await untilAborted(signal);
+          }
+          yield DONE;
+        };
+        const first = runner.run({ ...RUN, maxRunMs: 1_000 });
+        const second = runner.run(RUN);
+        await vi.advanceTimersByTimeAsync(1_001);
+        await first;
+        expect((await second).stopped).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not abort a run that starts after a reset', async () => {
       const { runner } = setup();
       TestBed.inject(PresenterActions).reset();

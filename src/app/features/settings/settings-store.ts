@@ -14,6 +14,7 @@ import {
 } from '../../mcp/agent/gemini/gemini-models';
 import { GENAI_CLIENT_FACTORY } from '../../mcp/agent/gemini/genai-client';
 
+export const KEY_CHECK_TIMEOUT_MS = 10_000;
 export const API_KEY_STORAGE_KEY = 'awm.apiKey';
 export const MODEL_STORAGE_KEY = 'awm.model';
 
@@ -84,12 +85,24 @@ export const SettingsStore = signalStore(
       keyCheck: resource<KeyVerdict, string | undefined>({
         params: () => apiKey().trim() || undefined,
         loader: async ({ params, abortSignal }) => {
+          const deadline = new AbortController();
+          const timer = setTimeout(() => deadline.abort(), KEY_CHECK_TIMEOUT_MS);
           try {
             const client = await createClient(params);
-            await client.models.list({ config: { pageSize: 1, abortSignal } });
+            await client.models.list({
+              config: { pageSize: 1, abortSignal: AbortSignal.any([abortSignal, deadline.signal]) },
+            });
             return { ok: true };
           } catch (error) {
-            return toVerdict(error);
+            return deadline.signal.aborted && !abortSignal.aborted
+              ? {
+                  ok: false,
+                  reason: 'unreachable',
+                  message: `Gemini did not answer within ${KEY_CHECK_TIMEOUT_MS / 1000}s`,
+                }
+              : toVerdict(error);
+          } finally {
+            clearTimeout(timer);
           }
         },
       }),

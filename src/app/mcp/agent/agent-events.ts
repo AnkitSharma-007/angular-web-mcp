@@ -17,6 +17,13 @@ export type AgentEvent =
   | { type: 'tools-changed'; added: string[]; removed: string[] }
   | { type: 'awaiting-approval'; toolName: string }
   | { type: 'error'; message: string; kind: AgentErrorKind }
-  | { type: 'done'; usage: TokenUsage; costUsd: number; model: string; ms: number };
+  | {
+      type: 'done';
+      usage: TokenUsage;
+      costUsd: number;
+      model: string;
+      ms: number;
+      partial?: boolean;
+    };
 
 export type AgentEventType = AgentEvent['type'];

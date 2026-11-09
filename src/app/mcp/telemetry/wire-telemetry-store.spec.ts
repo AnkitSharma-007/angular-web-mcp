@@ -300,5 +300,26 @@ describe('WireTelemetryStore', () => {
       expect(parsed).toHaveLength(1);
       expect(parsed[0]).toMatchObject({ id: 1, status: 'ok' });
     });
+
+    it('exports only one run, labelled with its id, when scoped', () => {
+      const store = setup();
+      store.record({ ...CALL, runId: 'run-a' }, { status: 'ok', latencyMs: 1 });
+      store.record({ ...CALL, runId: 'run-b' }, { status: 'ok', latencyMs: 2 });
+      store.record(CALL, { status: 'ok', latencyMs: 3 });
+      const scoped = JSON.parse(store.exportJson('run-b')) as {
+        runId: string;
+        packets: { runId?: string }[];
+      };
+      expect(scoped.runId).toBe('run-b');
+      expect(scoped.packets).toHaveLength(1);
+      expect(scoped.packets[0]?.runId).toBe('run-b');
+      expect(JSON.parse(store.exportJson())).toHaveLength(3);
+    });
+
+    it('redacts secrets in a scoped export too', () => {
+      const store = setup([KEY]);
+      store.record({ ...CALL, runId: 'run-a', params: { key: KEY } }, { status: 'ok' });
+      expect(store.exportJson('run-a')).not.toContain(KEY);
+    });
   });
 });

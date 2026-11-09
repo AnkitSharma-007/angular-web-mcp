@@ -453,8 +453,11 @@ type AgentEvent =
       costUsd: number;
       model: string;
       ms: number;
+      partial?: boolean;
     };
 ```
+
+`done` is emitted once for **every** outcome. `partial: true` means the run ended early (error, Stop or timeout), and `usage`/`costUsd` cover only the steps that really completed, including a step whose stream failed after it reported usage. The session store clears the previous run's usage when a new run starts, and still records a final `done` after Stop.
 
 **`McpToolGateway`** (`@Service()`) provides async `listTools()`, `callTool(name, args, signal)`, `waitForTool(name, ms)`, and the `tools`, `toolsVersion`, `lastChange` and `discovery` (`loading` | `ready` | `error`) signals. It keeps the registry descriptors private (they hold a `Window`), executes by descriptor, decodes the serialized result, and applies a discovery read only if it is newer than the last applied one. It emits the `tools/list`, `tools/call` and `notifications/tools/list_changed` packets.
 
@@ -464,7 +467,8 @@ type AgentEvent =
 2. Create the chat with `chats.create({ model, config: { systemInstruction, tools, thinkingConfig: { thinkingLevel, includeThoughts: true }, automaticFunctionCalling: { disable: true } } })`.
 3. Run a `sendMessageStream` loop for at most **8 steps**. Send each `functionResponse` back on the **same chat**, so thought signatures are preserved. Refresh the tools after a `toolchange`.
 4. Record `usageMetadata` (including `thoughtsTokenCount`) and `costUsd` in a `generateContent` packet.
-5. Map errors:
+5. Bound each model request: a stall timer (`STREAM_STALL_MS`, 45 s, `stallMs` option) covers the request and the gap between chunks, and is cleared during tool calls and human approvals so a person is never raced by a network timeout. A stall ends the run with a `network` error. The key check has its own 10 s deadline, and the Lab gives each isolated run a total budget (`RUN_BUDGET_MS`, 120 s).
+6. Map errors:
    - 401/403 for the key → `auth`
    - 429 → `quota`
    - 403/404 for the model → `model-access`
@@ -498,6 +502,7 @@ interface WirePacket {
 ```
 
 - Packets are capped at 500.
+- `exportJson()` exports every packet. `exportJson(runId)` exports `{ runId, packets }` for that run only. The inspector's stats, model table, human wait and Copy JSON all follow the same run filter, and the Stats tab names the scope.
 - **Redaction:** the `x-goog-api-key` header, any `key=` value, and the raw key itself are replaced with `•••`.
 
 ### 4.7 Gemini models (verified 2026-11-09, [models](https://aistudio.google.com/docs/models), [pricing](https://aistudio.google.com/docs/pricing))

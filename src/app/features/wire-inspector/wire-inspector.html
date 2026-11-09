@@ -186,6 +186,9 @@
 
     <mat-tab label="Stats">
       <div class="flex max-h-[calc(45vh-9rem)] flex-col gap-3 overflow-y-auto pt-3">
+        <p class="m-0 text-xs text-on-surface-variant" data-testid="stats-scope">
+          {{ scopeLabel() }}
+        </p>
         <div class="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="stats">
           <app-stat-tile label="Packets" [value]="'' + stats().total" />
           <app-stat-tile label="Tool calls" [value]="'' + stats().calls" />

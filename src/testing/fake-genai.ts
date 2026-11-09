@@ -19,7 +19,9 @@ export interface FakeTurn {
   functionCalls?: FakeCall[];
   usage?: GenAiUsage;
   error?: unknown;
+  errorAfterStream?: unknown;
   hold?: Promise<void>;
+  connectHold?: Promise<void>;
 }
 
 export interface FakeRequest {
@@ -83,6 +85,14 @@ export class FakeChat implements GenAiChat {
       throw new Error('FakeGenAI: no scripted turn left');
     }
     const turn = typeof entry === 'function' ? entry(request) : entry;
+    if (turn.connectHold) {
+      await Promise.race([
+        turn.connectHold,
+        new Promise<never>((_, reject) => {
+          signal?.addEventListener('abort', () => reject(abortError()), { once: true });
+        }),
+      ]);
+    }
     if (turn.error !== undefined) {
       throw turn.error;
     }
@@ -128,6 +138,9 @@ export class FakeChat implements GenAiChat {
     }
     this.history.push({ role: 'model', parts });
     yield { usageMetadata: turn.usage ?? { promptTokenCount: 10, candidatesTokenCount: 5 } };
+    if (turn.errorAfterStream !== undefined) {
+      throw turn.errorAfterStream;
+    }
   }
 }
 

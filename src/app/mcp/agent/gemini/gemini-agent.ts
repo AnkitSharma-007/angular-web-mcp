@@ -18,12 +18,14 @@ import { toFunctionDeclarations, toFunctionResponse } from './tool-adapter';
 
 export const MAX_AGENT_STEPS = 8;
 export const NEXT_TOOL_WAIT_MS = 3000;
+export const STREAM_STALL_MS = 45_000;
 
 export interface AgentRunOptions {
   signal: AbortSignal;
   model?: string;
   maxSteps?: number;
   runId?: string;
+  stallMs?: number;
 }
 
 export interface ClassifiedError {
@@ -113,7 +115,33 @@ export class GeminiAgent {
     const modelId = options.model ?? this.config.model();
     const maxSteps = options.maxSteps ?? MAX_AGENT_STEPS;
     const startedAt = this.clock().getTime();
+    const stallMs = options.stallMs ?? STREAM_STALL_MS;
     const totals: TokenUsage = { input: 0, output: 0, thinking: 0 };
+    let inflight: GenAiUsage | undefined;
+    let stalled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stall = new AbortController();
+    const stepSignal = AbortSignal.any([signal, stall.signal]);
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        stalled = true;
+        stall.abort();
+      }, stallMs);
+    };
+    const addUsage = (usage: TokenUsage) => {
+      totals.input += usage.input;
+      totals.output += usage.output;
+      totals.thinking += usage.thinking;
+    };
+    const finish = (partial: boolean): AgentEvent => ({
+      type: 'done',
+      usage: { ...totals },
+      costUsd: estimateCostUsd(modelId, totals, this.clock()) ?? 0,
+      model: modelId,
+      ms: this.clock().getTime() - startedAt,
+      ...(partial && { partial: true }),
+    });
     const thinkingLevel = findModel(modelId)?.thinkingLevel.toUpperCase();
 
     const configFor = (declarations: ReturnType<typeof toFunctionDeclarations>): GenAiConfig => ({
@@ -137,6 +165,7 @@ export class GeminiAgent {
 
       for (let step = 1; step <= maxSteps; step++) {
         if (signal.aborted) {
+          yield finish(true);
           return;
         }
         if (this.gateway.toolsVersion() !== knownVersion) {
@@ -162,9 +191,10 @@ export class GeminiAgent {
           params: { model: modelId, step, thinkingLevel, tools: tools.length, message },
         });
 
+        arm();
         const stream = await chat.sendMessageStream({
           message,
-          config: { ...configFor(declarations), abortSignal: signal },
+          config: { ...configFor(declarations), abortSignal: stepSignal },
         });
 
         const calls: GenAiFunctionCall[] = [];
@@ -172,8 +202,10 @@ export class GeminiAgent {
         let thoughts = 0;
         let metadata: GenAiUsage | undefined;
         for await (const chunk of stream) {
+          clearTimeout(timer);
           if (chunk.usageMetadata) {
             metadata = chunk.usageMetadata;
+            inflight = metadata;
           }
           for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
             if (part.functionCall) {
@@ -188,12 +220,13 @@ export class GeminiAgent {
               }
             }
           }
+          arm();
         }
+        clearTimeout(timer);
 
         const usage = usageOf(metadata);
-        totals.input += usage.input;
-        totals.output += usage.output;
-        totals.thinking += usage.thinking;
+        inflight = undefined;
+        addUsage(usage);
         const cost = estimateCostUsd(modelId, usage, this.clock());
         this.telemetry.end(packetId, {
           status: 'ok',
@@ -222,6 +255,7 @@ export class GeminiAgent {
           yield { type: 'tool-call', callId, name, args };
           const result = await this.gateway.callTool(name, args, signal);
           if (signal.aborted) {
+            yield finish(true);
             return;
           }
           yield {
@@ -248,25 +282,32 @@ export class GeminiAgent {
           message: `Stopped after ${maxSteps} steps without a final answer`,
         };
       }
-      yield {
-        type: 'done',
-        usage: totals,
-        costUsd: estimateCostUsd(modelId, totals, this.clock()) ?? 0,
-        model: modelId,
-        ms: this.clock().getTime() - startedAt,
-      };
+      yield finish(false);
     } catch (error) {
-      const aborted = isAbort(error, signal);
-      const { kind, message: raw } = classifyError(error);
-      const safe = redactSecrets(raw, [apiKey]);
+      clearTimeout(timer);
+      const timedOut = stalled && !signal.aborted;
+      const aborted = !timedOut && isAbort(error, signal);
+      const classified = timedOut
+        ? {
+            kind: 'network' as const,
+            message: `No response from Gemini for ${Math.round(stallMs / 1000)}s. Check your connection and try again.`,
+          }
+        : classifyError(error);
+      const safe = redactSecrets(classified.message, [apiKey]);
+      if (inflight) {
+        addUsage(usageOf(inflight));
+        inflight = undefined;
+      }
       if (packetId !== 0) {
         this.telemetry.end(packetId, { status: 'error', error: aborted ? 'aborted' : safe });
         packetId = 0;
       }
       if (!aborted) {
-        yield { type: 'error', kind, message: safe };
+        yield { type: 'error', kind: classified.kind, message: safe };
       }
+      yield finish(true);
     } finally {
+      clearTimeout(timer);
       if (packetId !== 0) {
         this.telemetry.end(packetId, { status: 'error', error: 'aborted' });
       }

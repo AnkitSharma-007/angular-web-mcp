@@ -92,6 +92,9 @@ export const AgentSessionStore = signalStore(
         patchState(store, (state) => ({
           phase: 'running' as const,
           transcript: [...state.transcript, entry],
+          lastUsage: null,
+          lastCostUsd: 0,
+          lastModel: null,
         }));
         let failed = false;
         try {
@@ -102,8 +105,8 @@ export const AgentSessionStore = signalStore(
             ...(request.runId !== undefined && { runId: request.runId }),
           };
           for await (const event of agent.run(text, options)) {
-            if (controller.signal.aborted) {
-              break;
+            if (controller.signal.aborted && event.type !== 'done') {
+              continue;
             }
             if (event.type === 'error') {
               failed = true;

@@ -2,7 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { DEFAULT_MODEL_ID } from '../../mcp/agent/gemini/gemini-models';
 import { GENAI_CLIENT_FACTORY } from '../../mcp/agent/gemini/genai-client';
 import { FakeApiError, FakeGenAI, fakeGenAiFactory } from '../../../testing/fake-genai';
-import { API_KEY_STORAGE_KEY, MODEL_STORAGE_KEY, SettingsStore, toVerdict } from './settings-store';
+import {
+  API_KEY_STORAGE_KEY,
+  KEY_CHECK_TIMEOUT_MS,
+  MODEL_STORAGE_KEY,
+  SettingsStore,
+  toVerdict,
+} from './settings-store';
 
 const KEY = 'AIza-test-key-0001';
 
@@ -178,6 +184,28 @@ describe('SettingsStore', () => {
         expect(fake.listCalls).toHaveLength(2);
       });
       expect(fake.listCalls[0]?.abortSignal?.aborted).toBe(true);
+    });
+
+    it('reports unreachable when Gemini never answers within the deadline', async () => {
+      vi.useFakeTimers();
+      try {
+        const fake = new FakeGenAI();
+        fake.listHold = new Promise(() => undefined);
+        const { store } = setup(fake);
+        store.saveKey(KEY, false);
+        await vi.advanceTimersByTimeAsync(0);
+        TestBed.tick();
+        await vi.advanceTimersByTimeAsync(KEY_CHECK_TIMEOUT_MS + 10);
+        TestBed.tick();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.keyStatus()).toBe('unreachable');
+        expect(store.keyCheck.value()).toMatchObject({
+          ok: false,
+          message: expect.stringContaining('did not answer'),
+        });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('goes back to missing after the key is forgotten', async () => {
