@@ -5,14 +5,14 @@ The arc comes from [§5 of the blueprint](architecture-blueprint.md#5-live-demo-
 
 ## Controls on stage
 
-| Key / control           | What it does                                                                                             |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| `1` `2` `3` `4`         | Fill the matching act prompt into the console, open it and focus the composer. Press **Enter** to run it |
-| Clicking a chip         | Runs that act's prompt at once, on the chip's model                                                      |
-| `` ` ``                 | Open or close the wire inspector                                                                         |
-| `Shift+R`               | Reset: the seed deals, empty history, empty packets, empty transcript, proposal drawer closed            |
-| **Stop** in the console | Aborts the agent, any open approval (it counts as a rejection) and the request in flight                 |
-| `Esc`                   | Closes the wire inspector or the proposal drawer, while focus is inside it                               |
+| Key / control           | What it does                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `1` `2` `3` `4`         | Fill the matching act prompt into the console, open it and focus the composer. Press **Enter** to run it                                                      |
+| Clicking a chip         | Runs that act's prompt at once, on the chip's model                                                                                                           |
+| `` ` ``                 | Open or close the wire inspector                                                                                                                              |
+| `Shift+R`               | Reset: the seed deals, empty history, empty packets, empty transcript, proposal drawer closed                                                                 |
+| **Stop** in the console | Aborts the agent, any open approval (it counts as a rejection) and the request in flight. The approval dialog covers it, so use **Reject** or `Shift+R` there |
+| `Esc`                   | Closes the wire inspector or the proposal drawer, while focus is inside it                                                                                    |
 
 Hotkeys are ignored while focus is in a text field. After typing in the console, click the page background (or press `Tab` away) before using `1`–`4`.
 
@@ -129,13 +129,13 @@ Show the registration styles side by side: `provideExperimentalWebMcpTools` on a
 
 There is no mock fallback by design. Stay in the story.
 
-| Symptom                            | Do                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------- |
-| The agent is going the wrong way   | **Stop**, `Shift+R`, run the chip again                                               |
-| Act 3 self-corrects early or never | Keep going; the Lab measures the rate. Show the packets                               |
-| Quota or rate-limit error card     | Wait a moment and re-run, or switch the model in the key dialog                       |
-| `auth` error card                  | Press the card's button to reopen the key dialog and paste the key again              |
-| `model-access` error card          | Press the card's button to go back to the default model                               |
-| Slow network                       | Switch to tethering. Use ⚡ for latency-sensitive beats                               |
-| The tools list is empty            | Check the chip. If it says `polyfill`, the flag is off; enable it and relaunch Chrome |
-| A dialog is stuck                  | **Stop** counts as a rejection and closes it                                          |
+| Symptom                            | Do                                                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The agent is going the wrong way   | **Stop**, `Shift+R`, run the chip again                                                                                                                                               |
+| Act 3 self-corrects early or never | Keep going; the Lab measures the rate. Show the packets                                                                                                                               |
+| Quota or rate-limit error card     | Wait a moment and re-run, or switch the model in the key dialog                                                                                                                       |
+| `auth` error card                  | Press the card's button to reopen the key dialog and paste the key again                                                                                                              |
+| `model-access` error card          | Press the card's button to go back to the default model                                                                                                                               |
+| Slow network                       | Switch to tethering. Use ⚡ for latency-sensitive beats                                                                                                                               |
+| The tools list is empty            | Check the chip. If it says `polyfill`, the flag is off; enable it and relaunch Chrome                                                                                                 |
+| A dialog is stuck                  | Click **Reject** (the agent answers once and stops), or press `Shift+R` to abandon the run. Console **Stop** is behind the dialog. `Shift+R` types an R if focus is in the note field |

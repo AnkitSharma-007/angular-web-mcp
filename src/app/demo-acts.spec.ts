@@ -316,6 +316,45 @@ describe('demo acts', () => {
     expect(registry.current.toolNames()).not.toContain('draftDealProposal');
   }
 
+  describe('abandoning an open approval', () => {
+    it('Shift+R from the dialog stops the run, closes the approval and changes nothing', async () => {
+      const demo = await startApp();
+      const arcadiaBefore = demo.deals.entityMap()['D-1002']?.discountPct;
+
+      demo.play('act4');
+      await vi.waitFor(
+        () => {
+          TestBed.inject(ApplicationRef).tick();
+          expect(document.querySelector('app-approval-dialog')).not.toBeNull();
+        },
+        { timeout: TIME_BUDGET_MS, interval: POLL_MS },
+      );
+      const dialog = document.querySelector('app-approval-dialog') as HTMLElement;
+
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="reject"]')
+        ?.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'R',
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      await demo.settle();
+
+      await vi.waitFor(() => expect(document.contains(dialog)).toBe(false), {
+        timeout: TIME_BUDGET_MS,
+        interval: POLL_MS,
+      });
+      await demo.settle();
+      expect(demo.session.status()).toBe('idle');
+      expect(demo.deals.entityMap()['D-1002']?.discountPct).toBe(arcadiaBefore);
+      expect(demo.deals.entityMap()['D-1003']?.contractStatus).toBe('active');
+      expect(demo.deals.history()).toEqual([]);
+    });
+  });
+
   describe('one act at a time', () => {
     it('Act 1 · Context: reads the summary, searches stalled deals and cites them', async () => {
       await playAct1(await startApp());
