@@ -14,7 +14,7 @@ import { DealsStore } from './data/deals-store';
   selector: 'app-dashboard-shell',
   imports: [RouterOutlet, RouterLink, ProposalDrawer, ByokBanner, AgentConsole],
   templateUrl: './dashboard-shell.html',
-  host: { class: 'flex flex-col gap-4' },
+  host: { class: 'flex flex-col gap-4 lg:pr-[var(--dock-right,0px)]' },
 })
 export class DashboardShell {
   private readonly router = inject(Router);

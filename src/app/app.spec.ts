@@ -1,11 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { expectNoA11yViolations } from '../testing/a11y';
 import { App } from './app';
 import { appConfig } from './app.config';
 import { routes } from './app.routes';
 import { PresenterActions } from './features/agent-console/presenter-actions';
-import { LayoutStore } from './features/layout/layout-store';
+import { CONSOLE_DOCK_WIDTH, LayoutStore } from './features/layout/layout-store';
 import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 describe('App', () => {
@@ -100,6 +100,28 @@ describe('App', () => {
     expect(TestBed.inject(LayoutStore).consoleOpen()).toBe(true);
     expect(TestBed.inject(PresenterActions).draft()?.text).toContain('pipeline summary');
   });
+
+  describe('console dock', () => {
+    it('reserves the console width only on dashboard routes while the console is open', async () => {
+      const { fixture, root } = await render();
+      const router = TestBed.inject(Router);
+      const layout = TestBed.inject(LayoutStore);
+      const dock = () => root.style.getPropertyValue('--dock-right');
+
+      await router.navigateByUrl('/dashboard');
+      await fixture.whenStable();
+      expect(dock()).toBe('0px');
+
+      layout.openConsole();
+      await fixture.whenStable();
+      expect(dock()).toBe(CONSOLE_DOCK_WIDTH);
+
+      await router.navigateByUrl('/about');
+      await fixture.whenStable();
+      expect(dock()).toBe('0px');
+    });
+  });
+
   describe('wire inspector', () => {
     const inspector = (root: HTMLElement) => root.querySelector('app-wire-inspector');
 

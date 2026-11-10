@@ -82,7 +82,8 @@ function sameValue(a: ProposalModel[ProposalKey], b: ProposalModel[ProposalKey])
   ],
   templateUrl: './proposal-drawer.html',
   host: {
-    class: 'glass fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col shadow-2xl',
+    class:
+      'glass fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col shadow-2xl lg:right-[var(--dock-right,0px)]',
     '(keydown.escape)': 'close()',
     '(input)': 'noteUserEdit($event)',
     '(change)': 'noteUserEdit($event)',

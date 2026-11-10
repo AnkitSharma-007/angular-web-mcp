@@ -125,6 +125,16 @@ describe('AgentConsole', () => {
     sessionStorage.clear();
   });
 
+  describe('docked layout', () => {
+    it('pins itself to the right edge on wide screens and scrolls only the transcript', () => {
+      const { root, q } = setup();
+      expect(root.className).toContain('lg:fixed');
+      expect(root.className).toContain('lg:right-0');
+      expect(q('transcript')?.className).toContain('lg:flex-1');
+      expect(q('agent-console')?.className).toContain('lg:h-full');
+    });
+  });
+
   describe('chips and input', () => {
     it('shows one chip per act with its hotkey', async () => {
       const { fixture, q } = setup();

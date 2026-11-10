@@ -1,11 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme';
 import { PresenterActions } from './features/agent-console/presenter-actions';
-import { LayoutStore } from './features/layout/layout-store';
+import { CONSOLE_DOCK_WIDTH, LayoutStore } from './features/layout/layout-store';
 import { ApiKeyDialogLauncher } from './features/settings/api-key-dialog-launcher';
 import { SettingsStore } from './features/settings/settings-store';
 import { WireInspector } from './features/wire-inspector/wire-inspector';
@@ -15,7 +15,10 @@ import { REGISTRY_KIND } from './mcp/registry/registry-kind';
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, MatToolbar, MatIconButton, MatIcon, WireInspector],
   templateUrl: './app.html',
-  host: { '(window:keydown)': 'onKeydown($event)' },
+  host: {
+    '(window:keydown)': 'onKeydown($event)',
+    '[style.--dock-right]': 'dockRight()',
+  },
 })
 export class App {
   protected readonly title = 'Angular Web MCP';
@@ -35,6 +38,10 @@ export class App {
     paths: 'exact',
     queryParams: 'ignored',
   });
+
+  protected readonly dockRight = computed(() =>
+    this.dashboardActive() && this.layout.consoleOpen() ? CONSOLE_DOCK_WIDTH : '0px',
+  );
 
   protected openKeyDialog(): void {
     void this.keyDialog.open();

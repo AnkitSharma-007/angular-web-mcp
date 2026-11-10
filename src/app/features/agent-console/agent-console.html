@@ -1,6 +1,6 @@
 <section
   aria-labelledby="agent-console-title"
-  class="glass flex flex-col gap-3 rounded-2xl p-4"
+  class="glass flex flex-col gap-3 rounded-2xl p-4 lg:h-full"
   data-testid="agent-console"
 >
   <header class="flex flex-wrap items-center gap-2">
@@ -10,7 +10,7 @@
     </h2>
     @if (modelInfo(); as info) {
       <span
-        class="rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant"
+        class="rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant lg:order-last"
         data-testid="model-badge"
         [attr.data-model]="info.id"
       >
@@ -85,7 +85,7 @@
     role="log"
     aria-label="Agent transcript"
     tabindex="0"
-    class="flex max-h-96 min-h-32 flex-col gap-2 overflow-y-auto"
+    class="flex max-h-96 min-h-32 flex-col gap-2 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1"
     data-testid="transcript"
   >
     @for (item of session.transcript(); track item.id) {
@@ -103,7 +103,7 @@
       class="min-h-12 flex-1 resize-y rounded-xl border border-outline bg-transparent px-3 py-2 text-sm text-on-surface"
       #prompt
       aria-label="Message the agent"
-      placeholder="Ask the agent. Enter sends, Shift+Enter adds a line."
+      placeholder="Ask the agent. Enter to send."
       data-testid="prompt"
       [formField]="promptForm.prompt"
       (keydown.enter)="submitOnEnter($event)"

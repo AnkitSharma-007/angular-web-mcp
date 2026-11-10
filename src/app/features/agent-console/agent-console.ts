@@ -36,7 +36,10 @@ const STATUS_LABELS: Readonly<Record<SessionStatus, string>> = {
   selector: 'app-agent-console',
   imports: [FormField, MatButton, MatIcon, MatIconButton, TranscriptItem],
   templateUrl: './agent-console.html',
-  host: { class: 'block' },
+  host: {
+    class:
+      'block lg:fixed lg:top-16 lg:right-0 lg:bottom-0 lg:z-30 lg:w-[var(--dock-right,24rem)] lg:p-3',
+  },
 })
 export class AgentConsole {
   protected readonly session = inject(AgentSessionStore);

@@ -1,5 +1,7 @@
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 
+export const CONSOLE_DOCK_WIDTH = '24rem';
+
 interface LayoutState {
   consoleOpen: boolean;
   inspectorOpen: boolean;
