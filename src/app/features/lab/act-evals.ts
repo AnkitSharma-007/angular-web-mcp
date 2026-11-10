@@ -14,6 +14,7 @@ export interface ActEval {
   prompts: readonly string[];
   model: GeminiModelId;
   requiredSequence: readonly string[];
+  promptGatedSteps?: Readonly<Record<string, RegExp>>;
   allowedExtras: AllowedExtras;
   forbidden: readonly string[];
   approvals?: readonly ScriptedDecision[];
@@ -126,6 +127,7 @@ export const ACT_EVALS: readonly ActEval[] = [
     ],
     model: demoPromptFor('act2').model,
     requiredSequence: ['setDealFilter', 'searchDeals', 'applyBatchDiscount', 'updateDealStages'],
+    promptGatedSteps: { setDealFilter: /\b(show|filter)\b/i },
     allowedExtras: 'read-only',
     forbidden: ['terminateContract', 'draftDealProposal'],
     assertState: assertAct2,
@@ -187,6 +189,11 @@ function firstMissing(required: readonly string[], names: readonly string[]): st
   return null;
 }
 
+export function requiredSequenceFor(spec: ActEval, prompt: string): readonly string[] {
+  const gates = spec.promptGatedSteps ?? {};
+  return spec.requiredSequence.filter((tool) => gates[tool]?.test(prompt) ?? true);
+}
+
 function stateFailure(spec: ActEval, outcome: RunOutcome): string | null {
   try {
     return spec.assertState(outcome.deals, outcome.proposals);
@@ -198,7 +205,8 @@ function stateFailure(spec: ActEval, outcome: RunOutcome): string | null {
 export function scoreRun(spec: ActEval, outcome: RunOutcome): RunScore {
   const failures: string[] = [];
   const names = outcome.toolCalls.map((call) => call.name);
-  const required = new Set(spec.requiredSequence);
+  const sequence = requiredSequenceFor(spec, outcome.prompt);
+  const required = new Set(sequence);
 
   if (outcome.error) {
     failures.push(`Run error (${outcome.error.kind}): ${outcome.error.message}`);
@@ -209,9 +217,9 @@ export function scoreRun(spec: ActEval, outcome: RunOutcome): RunScore {
   for (const name of new Set(names.filter((candidate) => spec.forbidden.includes(candidate)))) {
     failures.push(`Forbidden call: ${name}`);
   }
-  const missing = firstMissing(spec.requiredSequence, names);
+  const missing = firstMissing(sequence, names);
   if (missing !== null) {
-    failures.push(`Missing ${missing} in the order ${spec.requiredSequence.join(' → ')}`);
+    failures.push(`Missing ${missing} in the order ${sequence.join(' → ')}`);
   }
   const extras = new Set(
     names.filter((name) => !required.has(name) && !spec.forbidden.includes(name)),

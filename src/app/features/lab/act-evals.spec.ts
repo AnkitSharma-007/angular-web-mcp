@@ -29,7 +29,7 @@ const act4 = findActEval('act4');
 const emeaNegotiation = () =>
   createSeedDeals().filter((deal) => deal.region === 'EMEA' && deal.stage === 'negotiation');
 
-const passingAct2 = () => passingOutcome('act2');
+const passingAct2 = () => passingOutcome('act2', { prompt: act2.prompts[0] ?? '' });
 const passingAct3 = () => passingOutcome('act3');
 const passingAct4 = () => passingOutcome('act4');
 
@@ -121,6 +121,44 @@ describe('scoreRun', () => {
         'updateDealStages',
       );
       expect(scoreRun(act2, outcome).passed).toBe(true);
+    });
+
+    describe('steps gated on what the prompt asks for', () => {
+      const withoutFilter = ['searchDeals', 'applyBatchDiscount', 'updateDealStages'] as const;
+
+      it('requires setDealFilter for the stage prompt and for the Filter paraphrase', () => {
+        for (const prompt of act2.prompts.slice(0, 2)) {
+          const outcome = passingAct2();
+          outcome.prompt = prompt;
+          outcome.toolCalls = calls(...withoutFilter);
+          expect(scoreRun(act2, outcome).failures.join('\n')).toContain('Missing setDealFilter');
+        }
+      });
+
+      it('does not demand setDealFilter when the prompt never asks to show or filter', () => {
+        const prompt = act2.prompts[2] ?? '';
+        expect(prompt).not.toMatch(/\b(show|filter)\b/i);
+        const outcome = passingAct2();
+        outcome.prompt = prompt;
+        outcome.toolCalls = calls(...withoutFilter);
+        expect(scoreRun(act2, outcome).passed).toBe(true);
+      });
+
+      it('still requires the mutations and the business state for that prompt', () => {
+        const outcome = passingAct2();
+        outcome.prompt = act2.prompts[2] ?? '';
+        outcome.toolCalls = calls('searchDeals', 'applyBatchDiscount');
+        expect(scoreRun(act2, outcome).failures[0]).toMatch(/^Missing updateDealStages/);
+        expect(scoreRun(act2, outcome).failures[0]).toContain(
+          'searchDeals → applyBatchDiscount → updateDealStages',
+        );
+
+        const wrongState = passingAct2();
+        wrongState.prompt = act2.prompts[2] ?? '';
+        wrongState.toolCalls = calls(...withoutFilter);
+        wrongState.deals = seedDealsView();
+        expect(scoreRun(act2, wrongState).failures.join('\n')).toContain('State check');
+      });
     });
 
     it('fails when the order is wrong', () => {

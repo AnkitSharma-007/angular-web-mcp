@@ -171,6 +171,7 @@ describe('EvalSessionStore', () => {
         const outcome = passingOutcome(actOf(options).id, {
           runId: `r-${call}`,
           model: options.model,
+          prompt: options.prompt,
         });
         return actOf(options).id === 'act2' && call % 2 === 0
           ? { ...outcome, toolCalls: [toolCall('searchDeals')] }

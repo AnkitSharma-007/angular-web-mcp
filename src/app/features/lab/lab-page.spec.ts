@@ -331,6 +331,7 @@ describe('LabPage', () => {
       const id = evalAct(options.prompt);
       const outcome = passingOutcome(id, {
         model: options.model,
+        prompt: options.prompt,
         runId: `run-${id}-${options.prompt.length}`,
       });
       return Promise.resolve(
