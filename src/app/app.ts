@@ -8,7 +8,6 @@ import { CONSOLE_DOCK_WIDTH, LayoutStore } from './features/layout/layout-store'
 import { ApiKeyDialogLauncher } from './features/settings/api-key-dialog-launcher';
 import { SettingsStore } from './features/settings/settings-store';
 import { WireInspector } from './features/wire-inspector/wire-inspector';
-import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 @Component({
   selector: 'app-root',
@@ -21,7 +20,6 @@ import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 })
 export class App {
   protected readonly title = 'Angular Web MCP';
-  protected readonly registryKind = inject(REGISTRY_KIND);
   protected readonly settings = inject(SettingsStore);
   protected readonly layout = inject(LayoutStore);
   private readonly router = inject(Router);

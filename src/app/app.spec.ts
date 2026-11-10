@@ -6,7 +6,6 @@ import { appConfig } from './app.config';
 import { routes } from './app.routes';
 import { PresenterActions } from './features/agent-console/presenter-actions';
 import { CONSOLE_DOCK_WIDTH, LayoutStore } from './features/layout/layout-store';
-import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 
 describe('App', () => {
   beforeEach(() => {
@@ -52,14 +51,6 @@ describe('App', () => {
     const { root } = await render();
     expect(root.querySelector('mat-toolbar')?.classList.contains('glass')).toBe(true);
     expect(root.querySelector('button[aria-label^="Switch to"]')).toBeNull();
-  });
-
-  it('shows the registry kind chip', async () => {
-    TestBed.overrideProvider(REGISTRY_KIND, { useValue: 'polyfill' });
-    const { root } = await render();
-    const chip = root.querySelector('[data-testid="registry-chip"]');
-    expect(chip?.textContent?.trim()).toBe('WebMCP: polyfill');
-    expect(chip?.getAttribute('data-kind')).toBe('polyfill');
   });
 
   it('offers the key dialog from the toolbar', async () => {

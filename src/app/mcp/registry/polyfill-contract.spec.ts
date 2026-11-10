@@ -2,7 +2,6 @@ import { Injector, declareExperimentalWebMcpTool } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { McpToolGateway } from '../agent/mcp-tool-gateway';
 import { defineTool } from '../tooling/define-tool';
-import { ensureModelContext } from './ensure-model-context';
 import type { ModelContextRegistry } from './model-context';
 
 const tool = (name: string, run: () => unknown = () => ({ pong: true })) =>
@@ -17,7 +16,7 @@ const tool = (name: string, run: () => unknown = () => ({ pong: true })) =>
     run,
   });
 
-describe('installed @mcp-b polyfill (independent contract check)', () => {
+describe('@mcp-b polyfill as an independent implementation of the WebMCP client contract', () => {
   let originalWindow: PropertyDescriptor | undefined;
 
   beforeAll(async () => {
@@ -29,7 +28,8 @@ describe('installed @mcp-b polyfill (independent contract check)', () => {
       get: () => windowValue,
     });
     vi.stubGlobal('isSecureContext', true);
-    expect(await ensureModelContext()).toBe('polyfill');
+    const { installWebMCP } = await import('@mcp-b/webmcp-polyfill');
+    installWebMCP();
   });
 
   afterAll(() => {

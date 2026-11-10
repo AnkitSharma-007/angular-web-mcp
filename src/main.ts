@@ -1,17 +1,13 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { mergeApplicationConfig } from '@angular/core';
 import { App } from './app/app';
 import { appConfig } from './app/app.config';
-import { ensureModelContext } from './app/mcp/registry/ensure-model-context';
-import { REGISTRY_KIND } from './app/mcp/registry/registry-kind';
+import { findModelContext } from './app/mcp/registry/model-context';
 
-ensureModelContext()
-  .then((kind) =>
-    bootstrapApplication(
-      App,
-      mergeApplicationConfig(appConfig, {
-        providers: [{ provide: REGISTRY_KIND, useValue: kind }],
-      }),
-    ),
-  )
-  .catch((err: unknown) => console.error(err));
+const supported = findModelContext() !== null;
+
+(supported
+  ? bootstrapApplication(App, appConfig)
+  : import('./app/features/unsupported/unsupported-browser').then(({ UnsupportedBrowser }) =>
+      bootstrapApplication(UnsupportedBrowser),
+    )
+).catch((err: unknown) => console.error(err));

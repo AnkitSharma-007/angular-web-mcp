@@ -1,7 +1,5 @@
 import type { JsonSchema } from '../schema/validate-args';
 
-export type RegistryKind = 'native' | 'polyfill' | 'shim';
-
 export interface RegistryToolClient {
   signal?: AbortSignal;
 }

@@ -2,8 +2,8 @@ import {
   installFakeModelContext,
   uninstallFakeModelContext,
   type FakeModelContext,
-} from '../../../testing/fake-model-context';
-import { findModelContext, type RegistryTool } from './model-context';
+} from './fake-model-context';
+import { findModelContext, type RegistryTool } from '../app/mcp/registry/model-context';
 
 function tool(name: string, execute: RegistryTool['execute'] = () => 'ok'): RegistryTool {
   return { name, description: `${name} tool`, execute };
