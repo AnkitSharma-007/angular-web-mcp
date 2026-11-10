@@ -60,6 +60,36 @@ export function createProposalModel(seed: ProposalSeed = {}): ProposalModel {
   };
 }
 
+const TEXT_KEYS = ['dealId', 'clientName', 'contactEmail', 'productTier', 'startDate'] as const;
+const NUMBER_KEYS = ['seats', 'termMonths', 'discountPct'] as const;
+
+export interface NormalizedProposalInput {
+  model: ProposalModel;
+  unknownKeys: string[];
+}
+
+export function normalizeProposalInput(input: unknown): NormalizedProposalInput {
+  const source: Record<string, unknown> =
+    typeof input === 'object' && input !== null && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+  const model = {
+    ...Object.fromEntries(
+      TEXT_KEYS.map((key) => [key, typeof source[key] === 'string' ? source[key] : '']),
+    ),
+    ...Object.fromEntries(
+      NUMBER_KEYS.map((key) => [key, typeof source[key] === 'number' ? source[key] : Number.NaN]),
+    ),
+    lineItems: Array.isArray(source['lineItems'])
+      ? source['lineItems'].map((item) => (typeof item === 'string' ? item : ''))
+      : [],
+  } as unknown as ProposalModel;
+  const unknownKeys = Object.keys(source).filter(
+    (key) => !PROPOSAL_KEYS.includes(key as ProposalKey),
+  );
+  return { model, unknownKeys };
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function isIsoDate(value: string): boolean {

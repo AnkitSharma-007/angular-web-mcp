@@ -19,6 +19,8 @@ import {
   type ProposalModel,
 } from '../../core/models/proposal';
 
+export const UNKNOWN_FIELD_KIND = 'unknown_field';
+
 export const PROPOSAL_TOOL_NAME = 'draftDealProposal';
 
 export const PROPOSAL_TOOL_DESCRIPTION =
@@ -35,8 +37,21 @@ export const PROPOSAL_TOOL_DESCRIPTION =
 
 const wholeNumber = (value: number) => Number.isInteger(value);
 
-export function proposalSchema(dealExists: (dealId: string) => boolean): SchemaFn<ProposalModel> {
+export function proposalSchema(
+  dealExists: (dealId: string) => boolean,
+  unknownKeys: () => readonly string[] = () => [],
+): SchemaFn<ProposalModel> {
   return (path) => {
+    validate(path, () => {
+      const unknown = unknownKeys();
+      return unknown.length === 0
+        ? undefined
+        : {
+            kind: UNKNOWN_FIELD_KIND,
+            message: `Unknown field${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')}: send only the nine documented fields`,
+          };
+    });
+
     required(path.dealId, { message: 'Deal ID is required' });
     validate(path.dealId, ({ value }) =>
       value() === '' || dealExists(value())

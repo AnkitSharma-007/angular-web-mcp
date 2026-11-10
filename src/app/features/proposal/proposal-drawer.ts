@@ -10,6 +10,7 @@ import {
   untracked,
   viewChild,
   type ElementRef,
+  type WritableSignal,
 } from '@angular/core';
 import { form, FormField, FormRoot, type FieldTree } from '@angular/forms/signals';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -21,6 +22,7 @@ import {
   PROPOSAL_KEYS,
   STARTER_SEAT_LIMIT,
   createProposalModel,
+  normalizeProposalInput,
   type ProposalDraft,
   type ProposalKey,
   type ProposalModel,
@@ -34,7 +36,12 @@ import { DashboardUiStore } from '../dashboard/data/dashboard-ui-store';
 import { DealsStore } from '../dashboard/data/deals-store';
 import { DISCOUNT_APPROVAL_PCT } from '../dashboard/tools/risk-policy';
 import { FieldErrors } from './field-errors';
-import { PROPOSAL_TOOL_DESCRIPTION, PROPOSAL_TOOL_NAME, proposalSchema } from './proposal-form';
+import {
+  PROPOSAL_TOOL_DESCRIPTION,
+  PROPOSAL_TOOL_NAME,
+  UNKNOWN_FIELD_KIND,
+  proposalSchema,
+} from './proposal-form';
 import { ProposalsStore } from './proposals-store';
 
 export const AGENT_GLOW_MS = 1200;
@@ -94,14 +101,21 @@ export class ProposalDrawer {
   protected readonly dealOptions = computed(() => this.deals.entities());
   protected readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
 
-  protected readonly model = linkedSignal<string | null, ProposalModel>({
-    source: this.ui.proposalDealId,
-    computation: (dealId) => createProposalModel(untracked(() => this.seedFor(dealId))),
-  });
+  private readonly unknownKeys = signal<readonly string[]>([]);
+
+  protected readonly model = this.sanitizeAgentWrites(
+    linkedSignal<string | null, ProposalModel>({
+      source: this.ui.proposalDealId,
+      computation: (dealId) => createProposalModel(untracked(() => this.seedFor(dealId))),
+    }),
+  );
 
   protected readonly proposalForm: FieldTree<ProposalModel> = form(
     this.model,
-    proposalSchema((dealId) => this.deals.entityMap()[dealId] !== undefined),
+    proposalSchema(
+      (dealId) => this.deals.entityMap()[dealId] !== undefined,
+      () => this.unknownKeys(),
+    ),
     {
       name: 'proposal',
       experimentalWebMcpTool: {
@@ -130,9 +144,11 @@ export class ProposalDrawer {
       ? this.proposalForm()
           .errorSummary()
           .map((error) => {
-            const key = error.fieldTree().keyInParent();
             return {
-              label: typeof key === 'number' ? `Line item ${key + 1}` : this.labelOf(key),
+              label:
+                error.kind === UNKNOWN_FIELD_KIND
+                  ? 'Request'
+                  : this.labelOf(error.fieldTree().keyInParent()),
               message: error.message ?? error.kind,
             };
           })
@@ -169,16 +185,19 @@ export class ProposalDrawer {
   protected noteUserEdit(event: Event): void {
     const key = (event.target as HTMLElement | null)?.dataset['field'] as ProposalKey | undefined;
     if (key) {
+      this.unknownKeys.set([]);
       this.userEdits.add(key);
     }
   }
 
   protected addLineItem(): void {
+    this.unknownKeys.set([]);
     this.userEdits.add('lineItems');
     this.model.update((model) => ({ ...model, lineItems: [...model.lineItems, ''] }));
   }
 
   protected removeLineItem(index: number): void {
+    this.unknownKeys.set([]);
     this.userEdits.add('lineItems');
     this.model.update((model) => ({
       ...model,
@@ -186,7 +205,23 @@ export class ProposalDrawer {
     }));
   }
 
-  private labelOf(key: string): string {
+  /** Angular's form tool calls `set(args)` verbatim; normalising here keeps a malformed call from breaking the form. */
+  private sanitizeAgentWrites(
+    source: WritableSignal<ProposalModel>,
+  ): WritableSignal<ProposalModel> {
+    const write = source.set.bind(source);
+    source.set = (value) => {
+      const { model, unknownKeys } = normalizeProposalInput(value);
+      this.unknownKeys.set(unknownKeys);
+      write(model);
+    };
+    return source;
+  }
+
+  private labelOf(key: string | number): string {
+    if (typeof key === 'number' || /^\d+$/.test(key)) {
+      return `Line item ${Number(key) + 1}`;
+    }
     return key in FIELD_LABELS ? FIELD_LABELS[key as ProposalKey] : key;
   }
 

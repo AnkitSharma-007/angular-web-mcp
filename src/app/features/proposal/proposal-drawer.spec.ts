@@ -203,6 +203,90 @@ describe('ProposalDrawer', () => {
     });
   });
 
+  describe('malformed agent input', () => {
+    const CAPTURED = {
+      seats: 250,
+      startDate: '2026-12-01',
+      termMonths: 24,
+      tier: 'enterprise',
+      dealId: 'D-1001',
+    };
+
+    it('reports every missing field and the unknown one without throwing', async () => {
+      const errors: unknown[] = [];
+      const onError = vi.spyOn(console, 'error').mockImplementation((e) => void errors.push(e));
+      const { run, proposals, testId } = await mount();
+
+      const failed = await run(CAPTURED);
+
+      expect(failed).toContain('Form submission failed');
+      expect(failed).toContain('clientName: Client name is required');
+      expect(failed).toContain('contactEmail: Contact email is required');
+      expect(failed).toContain('productTier: Choose a product tier');
+      expect(failed).toContain('discountPct: Discount is required');
+      expect(failed).toContain('lineItems: Add at least one line item');
+      expect(failed).toContain('Unknown field tier');
+      expect(proposals.entities()).toHaveLength(0);
+      expect(testId('problems')).not.toBeNull();
+      expect(errors).toEqual([]);
+      onError.mockRestore();
+    });
+
+    it.each([
+      ['omitted', undefined],
+      ['null', null],
+      ['a string', 'Platform license'],
+      ['an object', { 0: 'Platform license' }],
+    ])('survives lineItems that is %s and keeps the form usable', async (_label, lineItems) => {
+      const { run, input, proposals, fixture } = await mount();
+      const rest: Record<string, unknown> = { ...VALID_ARGS };
+      delete rest['lineItems'];
+      const failed = await run(lineItems === undefined ? rest : { ...rest, lineItems });
+      expect(failed).toContain('lineItems: Add at least one line item');
+      expect(proposals.entities()).toHaveLength(0);
+      expect(input('clientName').value).toBe('Konkan Freight');
+
+      expect(await run(VALID_ARGS)).toBe('Form submitted successfully.');
+      expect(proposals.entities()).toHaveLength(1);
+      expect(fixture.nativeElement.querySelectorAll('[data-field="lineItems"]')).toHaveLength(2);
+    });
+
+    it('treats wrong scalar types as missing values instead of crashing', async () => {
+      const { run, proposals } = await mount();
+      const failed = await run({ ...VALID_ARGS, seats: '250', clientName: 42, startDate: null });
+      expect(failed).toContain('seats: Seats is required');
+      expect(failed).toContain('clientName: Client name is required');
+      expect(failed).toContain('startDate: Start date is required');
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('survives a non-object payload', async () => {
+      const { run, proposals } = await mount();
+      expect(await run('nonsense' as unknown as Record<string, unknown>)).toContain(
+        'Form submission failed',
+      );
+      expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('saves exactly one draft when a valid call follows a malformed one', async () => {
+      const { run, proposals } = await mount();
+      await run(CAPTURED);
+      expect(await run(VALID_ARGS)).toBe('Form submitted successfully.');
+      expect(proposals.entities()).toHaveLength(1);
+    });
+
+    it('stops reporting an unknown field once a person edits the form', async () => {
+      const { run, type, testId, fixture } = await mount();
+      await run({ ...VALID_ARGS, tier: 'x' });
+      type('clientName', 'Typed By Hand');
+      testId('save')!.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(testId('saved')).not.toBeNull();
+      });
+    });
+  });
+
   describe('discount approval', () => {
     it('does not ask the gate for a discount of 15% or less', async () => {
       const { run } = await mount();
@@ -381,6 +465,33 @@ describe('ProposalDrawer', () => {
       });
       expect(root.textContent).toContain('Deal ID is required');
       expect(proposals.entities()).toHaveLength(0);
+    });
+
+    it('labels blank line items one-based in the problem summary, even after removals', async () => {
+      const { testId, fixture, type } = await mount('D-1001');
+      type('lineItems', '');
+      testId('add-line-item')!.click();
+      fixture.detectChanges();
+      const second = fixture.nativeElement.querySelectorAll('[data-field="lineItems"]')[1];
+      second.value = 'Premium support';
+      second.dispatchEvent(new Event('input', { bubbles: true }));
+      testId('add-line-item')!.click();
+      fixture.detectChanges();
+      testId('save')!.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(testId('problems')?.textContent).toContain('Line item 1');
+      });
+      expect(testId('problems')?.textContent).toContain('Line item 3');
+      expect(testId('problems')?.textContent).not.toContain('Line item 2');
+
+      testId('remove-line-item')!.click();
+      fixture.detectChanges();
+      testId('save')!.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(testId('problems')?.textContent).toContain('Line item 2');
+      });
     });
 
     it('adds and removes line items', async () => {

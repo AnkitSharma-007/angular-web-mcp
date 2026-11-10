@@ -3,6 +3,7 @@ import {
   PRODUCT_TIERS,
   createProposalModel,
   isBillingDate,
+  normalizeProposalInput,
   isIsoDate,
 } from './proposal';
 
@@ -42,5 +43,32 @@ describe('proposal model', () => {
     ['not a date', false],
   ])('isBillingDate(%s) is %s', (value, expected) => {
     expect(isBillingDate(value)).toBe(expected);
+  });
+});
+
+describe('normalizeProposalInput', () => {
+  const valid = { ...createProposalModel({ dealId: 'D-1001' }), startDate: '2027-01-01' };
+
+  it('passes a valid payload through unchanged', () => {
+    expect(normalizeProposalInput(valid)).toEqual({ model: valid, unknownKeys: [] });
+  });
+
+  it('fills missing keys with empty values and reports unknown ones', () => {
+    const { model, unknownKeys } = normalizeProposalInput({ dealId: 'D-1001', tier: 'x' });
+    expect(model).toMatchObject({ dealId: 'D-1001', clientName: '', startDate: '', lineItems: [] });
+    expect(Number.isNaN(model.seats)).toBe(true);
+    expect(unknownKeys).toEqual(['tier']);
+  });
+
+  it.each([null, undefined, 'text', 7, [], [1]])('copes with %j as the whole payload', (input) => {
+    const { model } = normalizeProposalInput(input);
+    expect(model.lineItems).toEqual([]);
+    expect(model.dealId).toBe('');
+  });
+
+  it('blanks non-string line items and keeps the rest', () => {
+    expect(normalizeProposalInput({ ...valid, lineItems: ['A', 3, null] }).model.lineItems).toEqual(
+      ['A', '', ''],
+    );
   });
 });
