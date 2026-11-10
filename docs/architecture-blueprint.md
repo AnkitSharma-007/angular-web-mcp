@@ -5,13 +5,15 @@
 > It serves two purposes:
 >
 > 1. a long-lived reference app for Angular and WebMCP best practices
-> 2. the live demo at **Google DevFest Mumbai** (12–15 min)
+> 2. the live demo at **Google DevFest Mumbai** (9 min inside a 30-minute session)
 >
 > **Status:** ✅ Approved. Implemented session by session (§8).
 >
 > **Revision 2026-11-10:** the Lab's Model Race, the 🧠 Strategist model, the free/paid-tier badges and the inspector's per-model table (`byModel`) were removed to keep the app focused on WebMCP. The Lab keeps the scored act evals.
 >
 > **Revision 2026-11-10 (2):** the demo is now 9 minutes in a 30-minute session. Act 2 (Multi-step) was removed together with its `setDealFilter` and `updateDealStages` tools, the stage-move logic and the prompt-gated eval steps. The table's removable filter chips and the stage/region/value filter model went with them: the table now has a text search only (`DealsStore.query`, `setQuery`). The acts are now 1 Context, 2 Signal Form and 3 Governance; the dashboard route exposes 6 tools (7 while the proposal drawer is open). The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
+>
+> **Revision 2026-11-10 (3):** the app supports native WebMCP only. `ensureModelContext`, the polyfill fallback, the in-page shim, `REGISTRY_KIND` and the toolbar registry chip were removed. `main.ts` mounts `UnsupportedBrowser` (a lazy chunk) when `document.modelContext` is missing. The shim lives on as the test fake in `src/testing/fake-model-context.ts`, and the polyfill is a dev dependency used only by `polyfill-contract.spec.ts`.
 
 ---
 
@@ -19,22 +21,22 @@
 
 ### 0.1 Version pins (npm, verified 2026-11-09). Install with `--save-exact`
 
-| Concern         | Package                                                                   | Version    | Notes                                                           |
-| --------------- | ------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------- |
-| Framework       | `@angular/*`                                                              | **22.2.5** | Zoneless by default (v21+), OnPush by default (v22)             |
-| CLI / build     | `@angular/cli`, `@angular/build`                                          | **22.2.6** | `unit-test` builder, Vitest runner                              |
-| TypeScript      | `typescript`                                                              | **6.0.3**  | Angular 22 requires `>=6.0 <6.1`, so **not** 7.x                |
-| State           | `@ngrx/signals`                                                           | **22.0.1** |                                                                 |
-| UI              | `@angular/material`, `@angular/cdk`                                       | **22.2.6** | M3                                                              |
-| Headless a11y   | `@angular/aria`                                                           | **22.2.6** | `ngListbox` / `ngOption`                                        |
-| CSS             | `tailwindcss`, `@tailwindcss/postcss`                                     | **4.3.5**  | A separate `tailwind.css` entry that doesn't go through Sass    |
-| Fonts           | `@fontsource-variable/inter` 5.3.0, `material-symbols` 0.48.3             |            | Self-hosted, which keeps the CSP tight                          |
-| LLM SDK         | `@google/genai`                                                           | **3.0.0**  | Lazy-loaded through `injectAsync()`                             |
-| WebMCP polyfill | `@mcp-b/webmcp-polyfill`                                                  | **6.0.3**  | For browsers without a native registry. Not an offline fallback |
-| Tests           | `vitest` / `@vitest/coverage-v8` 5.1.0, `jsdom` 31.0.0, `axe-core` 4.14.0 |            |                                                                 |
-| Lint / format   | `angular-eslint` 22.6.0, `prettier` 3.9.10                                |            |                                                                 |
-| Runtime         | Node 24.18.0 / npm 11.16.0                                                |            |                                                                 |
-| Stage browser   | Chrome **158.0.8127.18**                                                  |            | Native `document.modelContext` (flag)                           |
+| Concern         | Package                                                                   | Version    | Notes                                                              |
+| --------------- | ------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
+| Framework       | `@angular/*`                                                              | **22.2.5** | Zoneless by default (v21+), OnPush by default (v22)                |
+| CLI / build     | `@angular/cli`, `@angular/build`                                          | **22.2.6** | `unit-test` builder, Vitest runner                                 |
+| TypeScript      | `typescript`                                                              | **6.0.3**  | Angular 22 requires `>=6.0 <6.1`, so **not** 7.x                   |
+| State           | `@ngrx/signals`                                                           | **22.0.1** |                                                                    |
+| UI              | `@angular/material`, `@angular/cdk`                                       | **22.2.6** | M3                                                                 |
+| Headless a11y   | `@angular/aria`                                                           | **22.2.6** | `ngListbox` / `ngOption`                                           |
+| CSS             | `tailwindcss`, `@tailwindcss/postcss`                                     | **4.3.5**  | A separate `tailwind.css` entry that doesn't go through Sass       |
+| Fonts           | `@fontsource-variable/inter` 5.3.0, `material-symbols` 0.48.3             |            | Self-hosted, which keeps the CSP tight                             |
+| LLM SDK         | `@google/genai`                                                           | **3.0.0**  | Lazy-loaded through `injectAsync()`                                |
+| WebMCP polyfill | `@mcp-b/webmcp-polyfill`                                                  | **6.0.3**  | Dev dependency: an independent client-contract check in tests only |
+| Tests           | `vitest` / `@vitest/coverage-v8` 5.1.0, `jsdom` 31.0.0, `axe-core` 4.14.0 |            |                                                                    |
+| Lint / format   | `angular-eslint` 22.6.0, `prettier` 3.9.10                                |            |                                                                    |
+| Runtime         | Node 24.18.0 / npm 11.16.0                                                |            |                                                                    |
+| Stage browser   | Chrome **158.0.8127.18**                                                  |            | Native `document.modelContext` (flag)                              |
 
 ### 0.2 Platform facts (verified in the Angular 22.2.5 source and Chrome docs)
 
@@ -67,7 +69,7 @@
   - a tool that throws is reported as a generic `UnknownError: Tool execution failed`. **The tool's own message never reaches the client**, so model-facing failures must be returned as `isError` results (D7).
   - the `toolchange` event.
 - Status: origin trial / flag, with no Intent-to-Ship yet ([source](https://developer.chrome.com/docs/ai/webmcp/secure-tools)). Enable `chrome://flags/#enable-webmcp-testing` on the stage laptop.
-- Other browsers get the polyfill. Hosting (Vercel) is owner-managed.
+- Other browsers are not supported: the app shows a page that asks the user to fix the browser. Hosting (Vercel) is owner-managed.
 
 ### 0.3 Open assumptions
 
@@ -121,7 +123,7 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
   - **Allowed:**
     - a one-line _why_ for something non-obvious
     - a link behind a workaround for an experimental API
-    - a one-line JSDoc on the exported `mcp/` platform API (`defineTool`, `withWebMcpTools`, `withAgentHistory`, `ensureModelContext`)
+    - a one-line JSDoc on the exported `mcp/` platform API (`defineTool`, `withWebMcpTools`, `withAgentHistory`)
   - **Not allowed:**
     - comments that restate the code
     - file headers and banners
@@ -153,7 +155,7 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
 ╚══════════════════════════════╪════════════════════════════════════════════│══════╝
                                ▼ getTools() / executeTool(tool, args, {signal})   │ telemetry
 ╔══════════════════════════════════════════════════════════════════════════════│══════╗
-║ REGISTRY  document.modelContext  (Chrome 158 native │ @mcp-b polyfill)        │      ║
+║ REGISTRY  document.modelContext  (Chrome 158 native)                    │      ║
 ╚════════▲══════════════════▲═════════════════════▲═══════════▲════════════════│══════╝
          │ registerTool     │                     │           │ toolchange      │
 ╔════════╧══════════════════╧═════════════════════╧═══════════╧════════════════│══════╗
@@ -198,9 +200,9 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
 
 ```
 .github/workflows/ci.yml        # tests only, push to main
-docs/  architecture-blueprint.md · demo-script.md · eval-log.md
+docs/  architecture-blueprint.md · how-to-run.md · eval-log.md
 src/
-├── main.ts                     # await ensureModelContext() → bootstrapApplication()
+├── main.ts                     # findModelContext() ? App : UnsupportedBrowser
 ├── index.html                  # production CSP
 ├── styles.scss · tailwind.css
 ├── testing/                    # fake-model-context · fake-genai · act-scripts · deal-fixtures · a11y · test-providers
@@ -598,7 +600,7 @@ interface ActEval {
 **Live readiness:**
 
 - the sign-off above
-- pre-flight (`docs/demo-script.md`): the Chrome flag is on and the chip says "native"; the key works for ⚡ and 🛠️; tethering is ready
+- pre-flight (`docs/how-to-run.md`): the Chrome flag is on and the dashboard loads instead of the unsupported-browser page; the key works for ⚡ and 🛠️; tethering is ready
 - safety rails: Stop aborts the agent, any approval and in-flight fetches; `Shift+R` resets; `maxSteps` is 8
 
 ---
@@ -1014,7 +1016,7 @@ interface ActEval {
 **10.3** `docs(release): add stage run-sheet and BYOK-focused README`
 
 - **Files:**
-  - `docs/demo-script.md`: the §5 arc, prompts, the expected visuals per beat, and pre-flight (the Chrome flag, the key for ⚡ and 🛠️, sign-off ≥ 9/10, tethering, Lighthouse).
+  - `docs/how-to-run.md`: the §5 arc, prompts, the expected visuals per beat, and pre-flight (the Chrome flag, the key for ⚡ and 🛠️, sign-off ≥ 9/10, tethering, Lighthouse).
   - `README.md`: pitch, quick start, BYOK and key restriction, model choice and cost (§4.7), browser support, an architecture summary, "Patterns you can reuse" (`withWebMcpTools`, `withAgentHistory`, `defineTool`), and contributing.
 
 ### 8.11 Roll-up
@@ -1041,7 +1043,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
 | Risk                                            | Mitigation                                                                                                     |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Experimental WebMCP APIs change in a 22.x patch | Exact pins. The seams are `defineTool`, `withWebMcpTools` and `mcp/registry`. Re-verify a week before the talk |
-| The Chrome flag is off on stage                 | Pre-flight and the registry chip. The polyfill keeps every act working                                         |
+| The Chrome flag is off on stage                 | Pre-flight: the dashboard must load, not the "browser doesn't support WebMCP" page                             |
 | The live model picks a different plan           | Sign-off ≥ 9/10; tool descriptions say _when_; Stop and `Shift+R`                                              |
 | Act 3 self-correction doesn't happen            | Framed as "if it slips, watch it fix itself". The Lab measures the rate                                        |
 | Slow venue network                              | Tethering, ⚡ for latency-sensitive beats, and streaming. No app fallback, by decision                         |
@@ -1621,10 +1623,10 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - `toolOutputs(request)` (`{name, ok, value}` per `functionResponse`) and the constants `ACT3_MID_DECEMBER` (`2026-12-15`) and `ACT3_BILLING_DATE` (`2026-12-01`).
   - `src/app/demo-acts.spec.ts`: the acceptance suite. It boots `App` with `appConfig.providers` plus a `FakeGenAI` factory, navigates to `/dashboard` and drives the real console chips, tools, forms, approval dialog and snackbar.
   - `PresenterActions.reset()` now runs the handlers first, clears the telemetry, and clears it again after the next render (see the gotchas).
-  - `docs/demo-script.md` (the stage run-sheet) and `README.md` (the BYOK-focused README).
+  - `docs/how-to-run.md` (the stage run-sheet) and `README.md` (the BYOK-focused README).
 - **Gotchas / Technical Notes:**
   - **Gate status:** `npm run lint`, `npm run test:coverage` (913 tests; statements 98.96 %, branches 96.27 %, functions 98.17 %, lines 99.17 %), `npm run build` and `prettier --check` pass on each of the 3 commits.
-  - **Not verified in a real browser or against the live API.** The inspector layout, the drawer height, the deferred load on a real click and the whole demo were only exercised in jsdom with fakes. `docs/demo-script.md` lists the pre-flight checks: the Chrome flag, a real key for ⚡ and 🛠️, a production-build CSP check, Lighthouse, and the 10-run sign-off sweep. `docs/eval-log.md` is still header-only until the first live sweep.
+  - **Not verified in a real browser or against the live API.** The inspector layout, the drawer height, the deferred load on a real click and the whole demo were only exercised in jsdom with fakes. `docs/how-to-run.md` lists the pre-flight checks: the Chrome flag, a real key for ⚡ and 🛠️, a production-build CSP check, Lighthouse, and the 10-run sign-off sweep. `docs/eval-log.md` is still header-only until the first live sweep.
   - **Bundle (warning only):** the initial total is 673.05 kB (was 654.13 kB). `WireInspector`, `MatTabs`, the packet views and `JsonView` are a separate lazy chunk (about 64 kB). The tab and listbox code is not in the initial chunk.
   - **Defer trigger:** the blueprint says `@defer (on interaction; prefetch on idle)`. A `when layout.inspectorOpen()` trigger was added because the `` ` `` hotkey and the Lab's **Packets** buttons open the inspector without clicking the toolbar button.
   - **Aria listbox in jsdom:** `list.focus()` activates the first option, so `ArrowDown` ×2 lands on the third row. In `follow` mode, when the selected option leaves the list (a run filter), the listbox reselects the first remaining option, so the detail pane shows that packet and not the empty state. A plain `element.click()` on an `li[ngOption]` selects it. An empty `ngListbox` is not rendered (the empty state is a paragraph), because an option-less listbox is an axe risk.
@@ -1639,10 +1641,10 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
     - The approval dialogs are the real `MatDialog` (found with `document.querySelector('app-approval-dialog')`). Close any leftover dialog and snackbar in `afterEach`, before TestBed tears down.
   - **Act data facts the specs rely on:** Act 2's targets are `D-1004…D-1007` (EMEA, negotiation). `D-1004` and `D-1005` are above 70 % and become closed-won. Iberia Telecom (`D-1006`) already has 10 %, so the discount snackbar says "3 deals" and the stage snackbar says "2 deals". MatSnackBar keeps the previous container in the DOM while it dismisses, so read the text of all `.mat-mdc-snack-bar-container` elements. Act 4 asks for approval twice: the discount (`D-1002`, High-impact action) and the termination (`D-1003`, Critical action). Act 3 uses `D-1001` and calls `searchDeals`, `getDealDetails` and `openProposalDrawer` before the two `draftDealProposal` calls.
   - **Reset gap that the acceptance suite found:** closing the proposal drawer unregisters `draftDealProposal` after the next render, and the gateway then records a `notifications/tools/list_changed` packet. That packet arrived after `telemetry.clear()`, so `Shift+R` left one packet behind. `reset()` now also clears in `afterNextRender(() => queueMicrotask(clear))`, which runs after the gateway's microtask. A packet recorded in the same frame as a reset is dropped too.
-  - **Docs:** the run-sheet uses the real labels (**Thinking**, **High-impact action**, **Critical action**, **Draft P-0001 saved for Konkan Freight**, **Undo**, **Undo to here**, **Run race**, **Build log rows**). If a label changes, update `docs/demo-script.md`. The README states that WebMCP is experimental and that the key is only as safe as its restrictions.
+  - **Docs:** the run-sheet uses the real labels (**Thinking**, **High-impact action**, **Critical action**, **Draft P-0001 saved for Konkan Freight**, **Undo**, **Undo to here**, **Run race**, **Build log rows**). If a label changes, update `docs/how-to-run.md`. The README states that WebMCP is experimental and that the key is only as safe as its restrictions.
   - **Blueprint deviations (non-functional):**
     - Added `json-view`, `packet-format` and `act-scripts` as separate files. The inspector's tabs, the packet list and the Tools resource are in one component.
     - The 10.2 suite is one sequential `it` plus four per-act `it`s and a cold-open `it`, not a single flat story.
     - 10.2 includes a small `fix` to `PresenterActions.reset` (described above), noted in the commit body.
 - **Ready for Session 11:**
-  - There is no Session 11. The 10 sessions and their commits in §8 are complete. What remains is the reserved week 3 from §8.11: run the Lab sweeps against a real key, tune the text the model reads (§5.2), log the rows in `docs/eval-log.md`, run the pre-flight in `docs/demo-script.md` on the stage laptop, and rehearse.
+  - There is no Session 11. The 10 sessions and their commits in §8 are complete. What remains is the reserved week 3 from §8.11: run the Lab sweeps against a real key, tune the text the model reads (§5.2), log the rows in `docs/eval-log.md`, run the pre-flight in `docs/how-to-run.md` on the stage laptop, and rehearse.

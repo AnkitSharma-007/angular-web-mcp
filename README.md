@@ -29,7 +29,7 @@ Open <http://localhost:4200>, then:
 3. Click a demo chip (**Context**, **Signal Form**, **Governance**), or ask your own question.
 4. Press `` ` `` to open the wire inspector and watch the traffic.
 
-Presenter keys: `1`–`3` fill a demo prompt, `` ` `` toggles the inspector, `Shift+R` resets the demo. See the [stage run-sheet](docs/demo-script.md).
+Step by step, with what you should see at each point, the presenter keys and the stage run of show: [How to run the demo](docs/how-to-run.md).
 
 You can use the tools without a key. Any WebMCP client in your browser (Chrome's agent, a tool-inspector extension) sees the same tools. Only the in-app console needs a key.
 
@@ -60,12 +60,9 @@ A typical Operator run costs about $0.01–0.03.
 
 ## Browser support
 
-| Browser                  | Registry                                                                                                                                | What works                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Chrome 158+ with flag    | Native `document.modelContext`                                                                                                          | Everything, including Chrome's own agent and extensions                             |
-| Any other modern browser | [`@mcp-b/webmcp-polyfill`](https://www.npmjs.com/package/@mcp-b/webmcp-polyfill), or a small in-page shim if the polyfill can't install | The in-app agent and every tool. External agents generally need the native registry |
+Desktop **Chrome 158 or newer** with `chrome://flags/#enable-webmcp-testing` enabled, then relaunch Chrome. Any other browser is not supported: the app shows a short page that says what to fix instead of loading. WebMCP in Chrome is an origin trial / flag with no ship date yet ([details](https://developer.chrome.com/docs/ai/webmcp/secure-tools)).
 
-Enable WebMCP in Chrome at `chrome://flags/#enable-webmcp-testing` and relaunch. The toolbar chip shows which registry is active: `native`, `polyfill` or `shim`. WebMCP in Chrome is an origin trial / flag with no ship date yet ([details](https://developer.chrome.com/docs/ai/webmcp/secure-tools)).
+Because the tools live on the browser's own registry, Chrome's agent and tool-inspector extensions see exactly what the in-app agent sees.
 
 ## What's inside
 
