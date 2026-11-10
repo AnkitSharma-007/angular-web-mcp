@@ -84,6 +84,27 @@ describe('PresenterActions', () => {
     expect(telemetry.entities()).toEqual([]);
   });
 
+  it('resumes a paused capture and drops the inspector run scope on reset', () => {
+    const { presenter, layout } = setup();
+    const telemetry = TestBed.inject(WireTelemetryStore);
+    telemetry.pause();
+    layout.showRun('run-14');
+    presenter.reset();
+    expect(telemetry.paused()).toBe(false);
+    expect(layout.inspectorRunId()).toBeNull();
+  });
+
+  it('keeps the inspector open on reset and records the next packet', () => {
+    const { presenter, layout } = setup();
+    const telemetry = TestBed.inject(WireTelemetryStore);
+    layout.showRun('run-14');
+    telemetry.pause();
+    presenter.reset();
+    expect(layout.inspectorOpen()).toBe(true);
+    telemetry.record({ channel: 'mcp', method: 'tools/list' }, { status: 'ok' });
+    expect(telemetry.entities()).toHaveLength(1);
+  });
+
   it('drops a list-change packet that the reset causes right after the next render', async () => {
     const { presenter } = setup();
     const telemetry = TestBed.inject(WireTelemetryStore);

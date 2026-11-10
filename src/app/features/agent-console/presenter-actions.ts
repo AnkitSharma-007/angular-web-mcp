@@ -56,6 +56,8 @@ export class PresenterActions {
     this.session.clear();
     this.draftState.set(null);
     this.resetHandlers.forEach((handler) => handler());
+    this.telemetry.resume();
+    this.layout.showRun(null);
     this.telemetry.clear();
     // Tools unregistered by the reset (the proposal drawer) report a list change after the next render.
     afterNextRender(() => queueMicrotask(() => void this.clearAfterDiscovery()), {
