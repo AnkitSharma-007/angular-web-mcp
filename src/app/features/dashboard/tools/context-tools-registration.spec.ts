@@ -10,9 +10,7 @@ const NAMES = [
   'getPipelineSummary',
   'openProposalDrawer',
   'searchDeals',
-  'setDealFilter',
   'terminateContract',
-  'updateDealStages',
 ];
 
 describe('dashboard tools route-scoped registration', () => {
@@ -28,7 +26,7 @@ describe('dashboard tools route-scoped registration', () => {
     localStorage.clear();
   });
 
-  it('exposes the eight dashboard tools on /dashboard and none on /about', async () => {
+  it('exposes the six dashboard tools on /dashboard and none on /about', async () => {
     const harness = await RouterTestingHarness.create();
     expect(registry.current.toolNames()).toEqual([]);
 

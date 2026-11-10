@@ -1,8 +1,8 @@
 import type { ActId } from '../app/features/agent-console/demo-prompts';
 import type { FakeRequest, FakeScript } from './fake-genai';
 
-export const ACT3_MID_DECEMBER = '2026-12-15';
-export const ACT3_BILLING_DATE = '2026-12-01';
+export const ACT2_MID_DECEMBER = '2026-12-15';
+export const ACT2_BILLING_DATE = '2026-12-01';
 
 export interface ToolOutput {
   name: string;
@@ -62,57 +62,6 @@ export function act1Script(): FakeScript[] {
 }
 
 export function act2Script(): FakeScript[] {
-  let targets: DealRow[] = [];
-  return [
-    {
-      thoughts: ['Narrow the table to EMEA deals in negotiation first.'],
-      functionCalls: [
-        {
-          name: 'setDealFilter',
-          args: { clear: true, regions: ['EMEA'], stages: ['negotiation'] },
-        },
-      ],
-    },
-    {
-      functionCalls: [
-        { name: 'searchDeals', args: { regions: ['EMEA'], stages: ['negotiation'] } },
-      ],
-    },
-    (request) => {
-      targets = dealRows(firstOutput(request));
-      return {
-        functionCalls: [
-          {
-            name: 'applyBatchDiscount',
-            args: {
-              dealIds: targets.map((deal) => deal.id),
-              discountPct: 10,
-              reason: 'Quarter-end push on EMEA negotiations',
-            },
-          },
-        ],
-      };
-    },
-    () => ({
-      functionCalls: [
-        {
-          name: 'updateDealStages',
-          args: {
-            updates: targets
-              .filter((deal) => deal.probability > 70)
-              .map((deal) => ({ dealId: deal.id, stage: 'closed-won' })),
-            reason: 'Above 70% win probability',
-          },
-        },
-      ],
-    }),
-    () => ({
-      text: `Gave ${targets.length} EMEA negotiation deals 10% off and closed the ones above 70% as won.`,
-    }),
-  ];
-}
-
-export function act3Script(): FakeScript[] {
   let dealId = '';
   let clientName = '';
   let contactEmail = '';
@@ -147,25 +96,25 @@ export function act3Script(): FakeScript[] {
     },
     () => ({
       thoughts: ['Mid-December: use the 15th.'],
-      functionCalls: [draft(ACT3_MID_DECEMBER)],
+      functionCalls: [draft(ACT2_MID_DECEMBER)],
     }),
     (request) => {
       const [attempt] = toolOutputs(request);
       const billingProblem = !attempt?.ok && String(attempt?.value).includes('startDate');
       return {
         thoughts: ['The start date has to be the 1st of a month. Use the next billing date.'],
-        functionCalls: [draft(billingProblem ? ACT3_BILLING_DATE : ACT3_MID_DECEMBER)],
+        functionCalls: [draft(billingProblem ? ACT2_BILLING_DATE : ACT2_MID_DECEMBER)],
       };
     },
     (request) => ({
       text: toolOutputs(request)[0]?.ok
-        ? `Drafted the 24-month Enterprise renewal for ${clientName}, starting ${ACT3_BILLING_DATE}.`
+        ? `Drafted the 24-month Enterprise renewal for ${clientName}, starting ${ACT2_BILLING_DATE}.`
         : 'The proposal could not be saved.',
     }),
   ];
 }
 
-export function act4Script(): FakeScript[] {
+export function act3Script(): FakeScript[] {
   return [
     {
       functionCalls: [
@@ -210,5 +159,4 @@ export const ACT_SCRIPTS: Readonly<Record<ActId, () => FakeScript[]>> = {
   act1: act1Script,
   act2: act2Script,
   act3: act3Script,
-  act4: act4Script,
 };

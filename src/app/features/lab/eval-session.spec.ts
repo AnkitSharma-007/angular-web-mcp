@@ -57,7 +57,7 @@ describe('EvalSessionStore', () => {
   describe('configuration', () => {
     it('selects every act with 5 runs by default', () => {
       const { store } = setup();
-      expect(store.selectedActs()).toEqual(['act1', 'act2', 'act3', 'act4']);
+      expect(store.selectedActs()).toEqual(['act1', 'act2', 'act3']);
       expect(store.runsPerAct()).toBe(5);
       expect(store.rows()).toEqual([]);
     });
@@ -65,7 +65,7 @@ describe('EvalSessionStore', () => {
     it('toggles acts and the number of runs', () => {
       const { store } = setup();
       store.toggleAct('act3');
-      expect(store.selectedActs()).toEqual(['act1', 'act2', 'act4']);
+      expect(store.selectedActs()).toEqual(['act1', 'act2']);
       store.toggleAct('act3');
       expect(store.selectedActs()).toContain('act3');
       store.setRunsPerAct(10);
@@ -80,7 +80,6 @@ describe('EvalSessionStore', () => {
       store.toggleAct('act1');
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       expect(store.estimatedCostUsd()).toBe(0);
     });
 
@@ -102,7 +101,7 @@ describe('EvalSessionStore', () => {
     it('runs the chosen number of prompts per act on that act’s model', async () => {
       const { store, runner } = setup();
       await store.run();
-      expect(runner.run).toHaveBeenCalledTimes(20);
+      expect(runner.run).toHaveBeenCalledTimes(15);
       const perAct = (id: string) =>
         runner.run.mock.calls.filter(([options]) => actOf(options).id === id);
       for (const spec of ACT_EVALS) {
@@ -116,10 +115,9 @@ describe('EvalSessionStore', () => {
       store.setRunsPerAct(10);
       store.toggleAct('act1');
       store.toggleAct('act2');
-      store.toggleAct('act3');
       await store.run();
       expect(runner.run).toHaveBeenCalledTimes(10);
-      expect(store.rows().map((row) => row.summary.actId)).toEqual(['act4']);
+      expect(store.rows().map((row) => row.summary.actId)).toEqual(['act3']);
     });
 
     it('cycles through the stage prompt and its paraphrases', async () => {
@@ -127,7 +125,6 @@ describe('EvalSessionStore', () => {
       store.setRunsPerAct(5);
       store.toggleAct('act1');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       const act2 = ACT_EVALS.find((spec) => spec.id === 'act2');
       const used = runner.run.mock.calls.map(([options]) => options.prompt);
@@ -147,7 +144,7 @@ describe('EvalSessionStore', () => {
       const { store, runner } = setup();
       await store.run();
       for (const [options] of runner.run.mock.calls) {
-        if (actOf(options).id === 'act4') {
+        if (actOf(options).id === 'act3') {
           expect(options.approvals).toEqual(['approve', 'reject']);
         } else {
           expect(options.approvals).toBeUndefined();
@@ -158,7 +155,7 @@ describe('EvalSessionStore', () => {
     it('scores each run and summarizes by act in catalog order', async () => {
       const { store } = setup();
       await store.run();
-      expect(store.runs()).toHaveLength(20);
+      expect(store.runs()).toHaveLength(15);
       expect(store.rows().map((row) => row.label)).toEqual(ACT_EVALS.map((spec) => spec.label));
       for (const row of store.rows()) {
         expect(row.summary).toMatchObject({ runs: 5, passes: 5, passRate: 1 });
@@ -179,12 +176,11 @@ describe('EvalSessionStore', () => {
       });
       store.toggleAct('act1');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       const [row] = store.rows();
       expect(row?.summary).toMatchObject({ passes: 2, runs: 5 });
       expect(row?.failures.map((failed) => failed.runId)).toEqual(['r-0', 'r-2', 'r-4']);
-      expect(row?.failures[0]?.failures[0]).toContain('Missing setDealFilter');
+      expect(row?.failures[0]?.failures[0]).toContain('Missing openProposalDrawer');
     });
 
     it('reports progress while running', async () => {
@@ -198,7 +194,6 @@ describe('EvalSessionStore', () => {
       });
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       const run = store.run();
       await vi.waitFor(() => expect(store.progress()).toEqual({ done: 1, total: 5 }));
       expect(store.running()).toBe(true);
@@ -232,7 +227,6 @@ describe('EvalSessionStore', () => {
       });
       store.toggleAct('act1');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       expect(store.rows()[0]?.summary.passes).toBe(3);
       expect(store.rows()[0]?.before).toBeNull();
@@ -249,9 +243,8 @@ describe('EvalSessionStore', () => {
       await store.run();
       store.toggleAct('act1');
       store.toggleAct('act2');
-      store.toggleAct('act3');
       await store.run();
-      expect(store.runs()).toHaveLength(20);
+      expect(store.runs()).toHaveLength(15);
       expect(store.rows().find((row) => row.summary.actId === 'act1')?.before).toBeNull();
     });
 
@@ -275,7 +268,6 @@ describe('EvalSessionStore', () => {
       });
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       const failed = store.runs()[0];
       expect(failed?.passed).toBe(false);
@@ -289,7 +281,6 @@ describe('EvalSessionStore', () => {
       store.setRunsPerAct(5);
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       expect(store.runs()[0]?.failures).toEqual(['Run error (unknown): plain']);
     });
@@ -313,7 +304,6 @@ describe('EvalSessionStore', () => {
       );
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       expect(runner.run).toHaveBeenCalledTimes(5);
     });
@@ -335,7 +325,6 @@ describe('EvalSessionStore', () => {
       const { store, runner } = setup();
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       const signals = new Set(runner.run.mock.calls.map(([options]) => options.signal));
       expect(signals.size).toBe(1);
@@ -352,7 +341,6 @@ describe('EvalSessionStore', () => {
       const { store } = setup();
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       const json = JSON.parse(store.exportJson());
       expect(json.exportedAt).toBe(NOW.toISOString());
@@ -363,13 +351,12 @@ describe('EvalSessionStore', () => {
     it('builds one log row per act with the date, change, before and p90', async () => {
       const { store } = setup();
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       await store.run();
-      const rows = store.logRows('Reworded the filter description');
+      const rows = store.logRows('Reworded the form description');
       expect(rows).toHaveLength(2);
       expect(rows[0]).toBe(
-        '| 2026-11-09 | act1 | Reworded the filter description | 5/5 → 5/5 | 1.5 s |',
+        '| 2026-11-09 | act1 | Reworded the form description | 5/5 → 5/5 | 1.5 s |',
       );
     });
 
@@ -377,7 +364,6 @@ describe('EvalSessionStore', () => {
       const { store } = setup();
       store.toggleAct('act2');
       store.toggleAct('act3');
-      store.toggleAct('act4');
       await store.run();
       expect(store.logRows('')).toEqual(['| 2026-11-09 | act1 | baseline | – → 5/5 | 1.5 s |']);
     });

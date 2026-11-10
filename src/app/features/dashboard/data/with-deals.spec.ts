@@ -48,15 +48,6 @@ describe('withDeals', () => {
       expect(store.byRegion().map((r) => r.key)).toEqual([...REGIONS]);
       expect(store.byRegion().reduce((sum, r) => sum + r.count, 0)).toBe(24);
     });
-
-    it('moves value between stages after a stage change', () => {
-      const store = createStore();
-      const before = store.pipelineByStage().find((s) => s.key === 'closed-won')!;
-      store.moveStages([{ dealId: 'D-1004', stage: 'closed-won' }]);
-      const after = store.pipelineByStage().find((s) => s.key === 'closed-won')!;
-      expect(after.count).toBe(before.count + 1);
-      expect(after.netValue).toBeGreaterThan(before.netValue);
-    });
   });
 
   describe('KPIs', () => {
@@ -247,49 +238,6 @@ describe('withDeals', () => {
         { id: 'D-9999', why: 'unknown deal' },
         { id: 'D-1004', why: 'already at 5%' },
       ]);
-    });
-
-    it('never reopens closed deals', () => {
-      const store = createStore();
-      const result = store.moveStages([
-        { dealId: 'D-1001', stage: 'negotiation' },
-        { dealId: 'D-1022', stage: 'proposal' },
-      ]);
-      expect(result.changed).toEqual([]);
-      expect(result.skipped.map((s) => s.why)).toEqual([
-        'closed deals cannot be reopened',
-        'closed deals cannot be reopened',
-      ]);
-      expect(store.entityMap()['D-1001']?.stage).toBe('closed-won');
-    });
-
-    it('skips unknown deals and same-stage moves', () => {
-      const result = createStore().moveStages([
-        { dealId: 'D-0000', stage: 'proposal' },
-        { dealId: 'D-1002', stage: 'negotiation' },
-      ]);
-      expect(result.skipped).toEqual([
-        { id: 'D-0000', why: 'unknown deal' },
-        { id: 'D-1002', why: 'already in negotiation' },
-      ]);
-    });
-
-    it('sets probability and contract status when closing', () => {
-      const store = createStore();
-      store.moveStages([
-        { dealId: 'D-1004', stage: 'closed-won' },
-        { dealId: 'D-1020', stage: 'closed-lost' },
-        { dealId: 'D-1008', stage: 'qualification' },
-      ]);
-      expect(store.entityMap()['D-1004']).toMatchObject({
-        probability: 100,
-        contractStatus: 'active',
-      });
-      expect(store.entityMap()['D-1020']).toMatchObject({ probability: 0, contractStatus: 'none' });
-      expect(store.entityMap()['D-1008']).toMatchObject({
-        stage: 'qualification',
-        probability: 45,
-      });
     });
 
     it('terminates an active closed-won contract once', () => {

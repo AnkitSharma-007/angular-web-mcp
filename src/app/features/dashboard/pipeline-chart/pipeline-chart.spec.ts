@@ -37,15 +37,12 @@ describe('PipelineChart', () => {
     expect(xs[1]).toBeCloseTo(widths[0] ?? 0, 5);
   });
 
-  it('recomputes widths after deals move stage', async () => {
+  it('recomputes widths after discounts change the net value', async () => {
     const { fixture, root, store } = await render();
     const widthOf = (stage: string) =>
       Number(root.querySelector(`rect[data-stage="${stage}"]`)?.getAttribute('width'));
     const before = { negotiation: widthOf('negotiation'), won: widthOf('closed-won') };
-    store.moveStages([
-      { dealId: 'D-1004', stage: 'closed-won' },
-      { dealId: 'D-1005', stage: 'closed-won' },
-    ]);
+    store.applyDiscount(['D-1004', 'D-1005'], 50);
     await fixture.whenStable();
     expect(widthOf('negotiation')).toBeLessThan(before.negotiation);
     expect(widthOf('closed-won')).toBeGreaterThan(before.won);
@@ -58,14 +55,15 @@ describe('PipelineChart', () => {
         Array.from(row.children).map((cell) => cell.textContent?.trim()),
       );
     expect(rows()).toHaveLength(6);
-    store.moveStages([{ dealId: 'D-1004', stage: 'closed-lost' }]);
+    store.applyDiscount(['D-1004'], 50);
     await fixture.whenStable();
-    const lost = store.pipelineByStage().find((stage) => stage.key === 'closed-lost');
-    expect(rows()[5]).toEqual([
-      'Closed Lost',
-      String(lost?.count),
+    const negotiation = store.pipelineByStage().find((stage) => stage.key === 'negotiation');
+    const row = rows().find((cells) => cells[0] === 'Negotiation');
+    expect(row).toEqual([
+      'Negotiation',
+      String(negotiation?.count),
       expect.any(String),
-      `${lost?.pct}%`,
+      `${negotiation?.pct}%`,
     ]);
   });
 

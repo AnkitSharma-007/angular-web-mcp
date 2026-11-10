@@ -4,7 +4,7 @@ import { By } from '@angular/platform-browser';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
-import { ACT3_BILLING_DATE, ACT_SCRIPTS } from '../testing/act-scripts';
+import { ACT2_BILLING_DATE, ACT_SCRIPTS } from '../testing/act-scripts';
 import { FakeGenAI, fakeGenAiFactory } from '../testing/fake-genai';
 import { useFakeModelContext } from '../testing/test-providers';
 import { App } from './app';
@@ -168,51 +168,9 @@ describe('demo acts', () => {
   }
 
   async function playAct2(demo: Demo) {
-    const seed = createSeedDeals();
-    const targets = seed.filter((deal) => deal.region === 'EMEA' && deal.stage === 'negotiation');
-    expect(targets.some((deal) => deal.probability > 70)).toBe(true);
-
-    demo.play('act2');
-    await demo.finish();
-    const events = demo.lastRun();
-
-    expect(toolNames(events)).toEqual([
-      'setDealFilter',
-      'searchDeals',
-      'applyBatchDiscount',
-      'updateDealStages',
-    ]);
-    const calls = events.filter((event) => event.type === 'tool-call');
-    expect(calls).toHaveLength(4);
-    expect(results(events)).toHaveLength(4);
-    expect(results(events).every((result) => result.ok)).toBe(true);
-    expect(results(events).map((result) => result.callId)).toEqual(
-      calls.map((call) => call.callId),
-    );
-    expect(document.querySelector('app-approval-dialog')).toBeNull();
-
-    expect(demo.deals.filter()).toMatchObject({ regions: ['EMEA'], stages: ['negotiation'] });
-    const now = demo.deals.entityMap();
-    for (const target of targets) {
-      expect(now[target.id]?.discountPct).toBe(10);
-      expect(now[target.id]?.stage).toBe(target.probability > 70 ? 'closed-won' : 'negotiation');
-    }
-    const inScope = new Set(targets.map((deal) => deal.id));
-    for (const original of seed.filter((deal) => !inScope.has(deal.id))) {
-      expect(now[original.id]).toEqual(original);
-    }
-    const stillNegotiating = targets.filter((deal) => deal.probability <= 70);
-    expect(demo.root.querySelectorAll('tr[mat-row]')).toHaveLength(stillNegotiating.length);
-    expect(demo.deals.history()).toHaveLength(2);
-    expect(snackbarText()).toContain(
-      `Agent moved ${targets.filter((deal) => deal.probability > 70).length} deals`,
-    );
-  }
-
-  async function playAct3(demo: Demo) {
     expect(registry.current.toolNames()).not.toContain('draftDealProposal');
 
-    demo.play('act3');
+    demo.play('act2');
     await demo.finish();
     const events = demo.lastRun();
 
@@ -246,21 +204,21 @@ describe('demo acts', () => {
       seats: 250,
       termMonths: 24,
       discountPct: 0,
-      startDate: ACT3_BILLING_DATE,
+      startDate: ACT2_BILLING_DATE,
     });
     const field = (name: string) =>
       demo.root.querySelector<HTMLInputElement>(`app-proposal-drawer [data-field="${name}"]`);
     expect(field('seats')?.value).toBe('250');
     expect(field('termMonths')?.value).toBe('24');
-    expect(field('startDate')?.value).toBe(ACT3_BILLING_DATE);
+    expect(field('startDate')?.value).toBe(ACT2_BILLING_DATE);
     expect(demo.root.querySelector('app-proposal-drawer [data-testid="saved"]')).not.toBeNull();
     expect(answerOf(events)).toContain('Konkan Freight');
   }
 
-  async function playAct4(demo: Demo) {
+  async function playAct3(demo: Demo) {
     const arcadiaBefore = demo.deals.entityMap()['D-1002']?.discountPct;
 
-    demo.play('act4');
+    demo.play('act3');
     const approval = await demo.decide('approve');
     expect(approval).toContain('Set a 25% discount on 1 deal');
     const termination = await demo.decide('reject');
@@ -321,7 +279,7 @@ describe('demo acts', () => {
       const demo = await startApp();
       const arcadiaBefore = demo.deals.entityMap()['D-1002']?.discountPct;
 
-      demo.play('act4');
+      demo.play('act3');
       await vi.waitFor(
         () => {
           TestBed.inject(ApplicationRef).tick();
@@ -331,16 +289,14 @@ describe('demo acts', () => {
       );
       const dialog = document.querySelector('app-approval-dialog') as HTMLElement;
 
-      document
-        .querySelector<HTMLButtonElement>('[data-testid="reject"]')
-        ?.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: 'R',
-            shiftKey: true,
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
+      document.querySelector<HTMLButtonElement>('[data-testid="reject"]')?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'R',
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
       await demo.settle();
 
       await vi.waitFor(() => expect(document.contains(dialog)).toBe(false), {
@@ -360,31 +316,27 @@ describe('demo acts', () => {
       await playAct1(await startApp());
     });
 
-    it('Act 2 · Multi-step: filters, discounts and closes without asking a human', async () => {
+    it('Act 2 · Signal Form: self-corrects the billing date and saves the draft', async () => {
       await playAct2(await startApp());
     });
 
-    it('Act 3 · Signal Form: self-corrects the billing date and saves the draft', async () => {
+    it('Act 3 · Governance: approve the discount, reject the termination, then undo', async () => {
       await playAct3(await startApp());
-    });
-
-    it('Act 4 · Governance: approve the discount, reject the termination, then undo', async () => {
-      await playAct4(await startApp());
     });
   });
 
-  it('opens cold with the eight tools and loses them when leaving the dashboard', async () => {
+  it('opens cold with the six tools and loses them when leaving the dashboard', async () => {
     const demo = await startApp();
-    expect(registry.current.toolNames()).toHaveLength(8);
+    expect(registry.current.toolNames()).toHaveLength(6);
     await TestBed.inject(Router).navigateByUrl('/about');
     await demo.settle();
     expect(registry.current.toolNames()).toEqual([]);
     await TestBed.inject(Router).navigateByUrl('/dashboard');
     await demo.settle();
-    expect(registry.current.toolNames()).toHaveLength(8);
+    expect(registry.current.toolNames()).toHaveLength(6);
   });
 
-  it('plays the four acts back to back on one app, resets, and stays under five seconds', async () => {
+  it('plays the three acts back to back on one app, resets, and stays under five seconds', async () => {
     const demo = await startApp();
     vi.useFakeTimers({
       toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
@@ -394,8 +346,7 @@ describe('demo acts', () => {
     await playAct1(demo);
     await playAct2(demo);
     await playAct3(demo);
-    await playAct4(demo);
-    expect(demo.session.transcript().filter((entry) => entry.kind === 'user')).toHaveLength(4);
+    expect(demo.session.transcript().filter((entry) => entry.kind === 'user')).toHaveLength(3);
     expect(Date.now() - startedAt).toBeLessThan(TIME_BUDGET_MS);
 
     await reset(demo);

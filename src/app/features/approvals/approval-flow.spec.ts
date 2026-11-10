@@ -111,8 +111,8 @@ describe('approval gating end to end', () => {
   it('rejects the caller and closes the approval without committing when the run is aborted', async () => {
     const controller = new AbortController();
     const call = execute(
-      'updateDealStages',
-      { updates: [{ dealId: 'D-1002', stage: 'closed-lost' }], reason: REASON },
+      'applyBatchDiscount',
+      { dealIds: ['D-1002'], discountPct: 25, reason: REASON },
       controller.signal,
     );
     const settled = call.then(
@@ -123,7 +123,7 @@ describe('approval gating end to end', () => {
     controller.abort();
 
     expect((await settled)?.name).toBe('AbortError');
-    expect(store.entityMap()['D-1002']?.stage).toBe('negotiation');
+    expect(store.entityMap()['D-1002']?.discountPct).toBe(0);
     expect(store.canUndo()).toBe(false);
     await vi.waitFor(() => {
       TestBed.inject(ApplicationRef).tick();

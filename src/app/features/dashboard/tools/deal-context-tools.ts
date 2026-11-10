@@ -78,9 +78,8 @@ const searchDealsTool = defineTool({
   title: 'Search deals',
   description:
     'Use to find deal IDs and compare deals before changing anything. All filters are optional ' +
-    'and combine with AND; results ignore the table view and are sorted by net value, largest ' +
-    'first. `total` is the full match count, `deals` is capped by `limit`. Values are net of ' +
-    'discount, in USD. Use setDealFilter instead to change what the user sees.',
+    'and combine with AND; results are sorted by net value, largest first. `total` is the full ' +
+    'match count, `deals` is capped by `limit`. Values are net of discount, in USD.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

@@ -70,22 +70,7 @@ export function makeDraft(overrides: Partial<ProposalDraft> = {}): ProposalDraft
   };
 }
 
-export function act2FinalDeals(): DealsView {
-  return seedDealsView((deals) => {
-    for (const deal of deals) {
-      if (deal.region === 'EMEA' && deal.stage === 'negotiation') {
-        deal.discountPct = 10;
-        if (deal.probability > 70) {
-          deal.stage = 'closed-won';
-          deal.probability = 100;
-          deal.contractStatus = 'active';
-        }
-      }
-    }
-  });
-}
-
-export function act4FinalDeals(): DealsView {
+export function act3FinalDeals(): DealsView {
   return seedDealsView((deals) => {
     const arcadia = deals.find((deal) => deal.account === 'Arcadia Bank');
     if (arcadia) {
@@ -100,24 +85,18 @@ export function passingOutcome(actId: ActId, overrides: Partial<RunOutcome> = {}
       return makeOutcome({ toolCalls: calls('getPipelineSummary'), ...overrides });
     case 'act2':
       return makeOutcome({
-        toolCalls: calls('setDealFilter', 'searchDeals', 'applyBatchDiscount', 'updateDealStages'),
-        deals: act2FinalDeals(),
-        ...overrides,
-      });
-    case 'act3':
-      return makeOutcome({
         toolCalls: calls('openProposalDrawer', 'draftDealProposal'),
         proposals: { drafts: [makeDraft()] },
         ...overrides,
       });
-    case 'act4':
+    case 'act3':
       return makeOutcome({
         toolCalls: calls('searchDeals', 'applyBatchDiscount', 'terminateContract'),
         decisions: [
           decision({ toolName: 'applyBatchDiscount', approved: true, callsBefore: 2 }),
           decision({ toolName: 'terminateContract', approved: false, callsBefore: 3 }),
         ],
-        deals: act4FinalDeals(),
+        deals: act3FinalDeals(),
         ...overrides,
       });
   }

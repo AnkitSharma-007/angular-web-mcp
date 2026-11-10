@@ -12,11 +12,9 @@ import {
   EMPTY_FILTER,
   MAX_DISCOUNT_PCT,
   isAtRisk,
-  isClosedStage,
   type ContractStatus,
   type Deal,
   type DealFilter,
-  type DealStage,
 } from '../../../core/models/deal';
 import type { MutationResult } from '../../../core/models/mutation-result';
 import {
@@ -27,11 +25,6 @@ import {
   searchDeals,
   type DealSearch,
 } from './deal-analytics';
-
-export interface StageUpdate {
-  dealId: string;
-  stage: DealStage;
-}
 
 interface FilterState {
   filter: DealFilter;
@@ -83,11 +76,6 @@ export function withDeals() {
         );
         return result;
       },
-      moveStages(updates: readonly StageUpdate[]): MutationResult<DealStage> {
-        const { changed, skipped, patches } = planStageMoves(store.entityMap(), updates);
-        patchState(store, ...patches.map((patch) => updateEntity<Deal>(patch)));
-        return { changed, skipped };
-      },
       terminateContract(dealId: string): MutationResult<ContractStatus> {
         const deal = store.entityMap()[dealId];
         const result: MutationResult<ContractStatus> = { changed: [], skipped: [] };
@@ -111,41 +99,4 @@ export function withDeals() {
       },
     })),
   );
-}
-
-export interface StagePlan extends MutationResult<DealStage> {
-  patches: { id: string; changes: Partial<Deal> }[];
-}
-
-/** Decides which stage moves apply and exactly which fields each one writes, without touching state. */
-export function planStageMoves(
-  entities: Readonly<Record<string, Deal | undefined>>,
-  updates: readonly StageUpdate[],
-): StagePlan {
-  const plan: StagePlan = { changed: [], skipped: [], patches: [] };
-  for (const { dealId: id, stage } of updates) {
-    const deal = entities[id];
-    if (!deal) {
-      plan.skipped.push({ id, why: 'unknown deal' });
-    } else if (isClosedStage(deal.stage)) {
-      plan.skipped.push({ id, why: 'closed deals cannot be reopened' });
-    } else if (deal.stage === stage) {
-      plan.skipped.push({ id, why: `already in ${stage}` });
-    } else {
-      plan.changed.push({ id, before: deal.stage, after: stage });
-      plan.patches.push({ id, changes: closeOutChanges(stage) });
-    }
-  }
-  return plan;
-}
-
-function closeOutChanges(stage: DealStage): Partial<Deal> {
-  switch (stage) {
-    case 'closed-won':
-      return { stage, probability: 100, contractStatus: 'active' };
-    case 'closed-lost':
-      return { stage, probability: 0 };
-    default:
-      return { stage };
-  }
 }

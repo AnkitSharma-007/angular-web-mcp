@@ -1,14 +1,5 @@
 import { inject, type Signal, type WebMcpToolDescriptor } from '@angular/core';
-import {
-  DEAL_STAGES,
-  REGIONS,
-  DEAL_STAGE_LABELS,
-  type ContractStatus,
-  type Deal,
-  type DealFilter,
-  type DealStage,
-  type Region,
-} from '../../../core/models/deal';
+import type { ContractStatus, Deal } from '../../../core/models/deal';
 import type { MutationResult } from '../../../core/models/mutation-result';
 import type { HistoryEntry } from '../../../core/store-features/with-agent-history';
 import { formatCompactCurrency, netValue, roundMoney } from '../../../core/util/money';
@@ -16,22 +7,11 @@ import type { ApprovalRequest } from '../../../mcp/tooling/approval-gate';
 import { defineTool, type ToolContext } from '../../../mcp/tooling/define-tool';
 import { ToolInputError } from '../../../mcp/tooling/tool-errors';
 import { UndoNotifier } from '../../history/undo-notifier';
-import type { StageUpdate } from '../data/with-deals';
-import {
-  assessDiscount,
-  assessStageMoves,
-  discountImpact,
-  type StageAssessment,
-} from './risk-policy';
+import { assessDiscount, discountImpact } from './risk-policy';
 
 export interface DealMutationStore {
   readonly entityMap: Signal<Readonly<Record<string, Deal | undefined>>>;
-  readonly filter: Signal<DealFilter>;
-  readonly filteredDeals: Signal<readonly Deal[]>;
-  setFilter(partial: Partial<DealFilter>): void;
-  clearFilter(): void;
   applyDiscount(dealIds: readonly string[], discountPct: number): MutationResult<number>;
-  moveStages(updates: readonly StageUpdate[]): MutationResult<DealStage>;
   terminateContract(dealId: string): MutationResult<ContractStatus>;
   recordSnapshot(label: string): string;
   undoTo(id: string): HistoryEntry | null;
@@ -63,14 +43,6 @@ function unique<T>(items: readonly T[]): T[] {
   return [...new Set(items)];
 }
 
-interface FilterArgs {
-  stages?: DealStage[];
-  regions?: Region[];
-  minValue?: number;
-  query?: string;
-  clear?: boolean;
-}
-
 interface DiscountArgs {
   dealIds: string[];
   discountPct: number;
@@ -82,47 +54,9 @@ interface TerminateArgs {
   reason: string;
 }
 
-interface StageArgs {
-  updates: StageUpdate[];
-  reason: string;
-}
-
 export function dealMutationTools(store: DealMutationStore): WebMcpToolDescriptor[] {
   const undoer = ({ snapshotId }: ToolContext) =>
     snapshotId === undefined ? undefined : () => store.undoTo(snapshotId);
-
-  const setDealFilter = defineTool<FilterArgs>({
-    name: 'setDealFilter',
-    title: 'Set deal filter',
-    description:
-      'Use to change which deals the user sees in the table, for example "show only EMEA ' +
-      'negotiations". Only changes the view, never the deals. Provided fields are merged into ' +
-      'the current filter; set `clear` to reset it first. Returns the filter now in effect and ' +
-      'how many deals are visible. Use searchDeals instead when you only need to look.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        stages: { type: 'array', items: { type: 'string', enum: DEAL_STAGES } },
-        regions: { type: 'array', items: { type: 'string', enum: REGIONS } },
-        minValue: { type: 'number', minimum: 0, description: 'Minimum net value in USD' },
-        query: { type: 'string', description: 'Text in id, account, title or owner' },
-        clear: { type: 'boolean', description: 'Reset every filter before applying the others' },
-      },
-    },
-    run: (args) => {
-      if (args.clear) {
-        store.clearFilter();
-      }
-      store.setFilter({
-        ...(args.stages !== undefined && { stages: args.stages }),
-        ...(args.regions !== undefined && { regions: args.regions }),
-        ...(args.minValue !== undefined && { minValue: args.minValue }),
-        ...(args.query !== undefined && { query: args.query }),
-      });
-      return { applied: store.filter(), visibleCount: store.filteredDeals().length };
-    },
-  });
 
   const applyBatchDiscount = defineTool<DiscountArgs, UndoNotifier>({
     name: 'applyBatchDiscount',
@@ -193,78 +127,6 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
     },
   });
 
-  const updateDealStages = defineTool<StageArgs, UndoNotifier>({
-    name: 'updateDealStages',
-    title: 'Update deal stages',
-    description:
-      'Use to move up to 25 deals to new pipeline stages in one call. Closed deals cannot be ' +
-      'reopened and unknown IDs are skipped, each with a reason in `skipped`. Moving a deal ' +
-      'worth over $100k to closed-lost needs human approval, and the human may reject: then ' +
-      'nothing changes and you get status "rejected_by_human". Closing as closed-won activates ' +
-      'the contract. Needs exact IDs from searchDeals.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['updates', 'reason'],
-      properties: {
-        updates: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 25,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['dealId', 'stage'],
-            properties: { dealId: DEAL_ID, stage: { type: 'string', enum: DEAL_STAGES } },
-          },
-        },
-        reason: REASON,
-      },
-    },
-    annotations: { consequentialHint: true },
-    deps: () => inject(UndoNotifier),
-    risk: ({ updates, reason }): ApprovalRequest | null => {
-      const assessment = assessStageMoves(store.entityMap(), lastPerDeal(updates));
-      return assessment.flags.length === 0
-        ? null
-        : {
-            toolName: 'updateDealStages',
-            risk: 'high',
-            summary: summarizeStageBatch(assessment),
-            reason,
-            policy: assessment.flags,
-            diff: assessment.moves.map((move) => ({
-              label: `${move.account} (${move.id})`,
-              field: 'Stage',
-              before: DEAL_STAGE_LABELS[move.before],
-              after: DEAL_STAGE_LABELS[move.after],
-              note: [
-                `${formatCompactCurrency(move.netValue)} net value`,
-                ...(move.effect ? [move.effect] : []),
-              ].join('. '),
-            })),
-            details: {
-              policy: assessment.flags,
-              deals: assessment.flaggedDeals,
-              moves: assessment.moves,
-            },
-          };
-    },
-    snapshot: store,
-    snapshotLabel: ({ updates }) =>
-      `Stage updates on ${plural(lastPerDeal(updates).length, 'deal')}`,
-    run: ({ updates }, ctx, notifier) => {
-      const { changed, skipped } = store.moveStages(lastPerDeal(updates));
-      if (changed.length > 0) {
-        notifier.announce(
-          `Agent moved ${plural(changed.length, 'deal')} to a new stage`,
-          undoer(ctx),
-        );
-      }
-      return { status: outcome(changed.length, skipped.length), moved: changed, skipped };
-    },
-  });
-
   const terminateContract = defineTool<TerminateArgs, UndoNotifier>({
     name: 'terminateContract',
     title: 'Terminate contract',
@@ -321,16 +183,5 @@ export function dealMutationTools(store: DealMutationStore): WebMcpToolDescripto
     },
   });
 
-  return [setDealFilter, applyBatchDiscount, updateDealStages, terminateContract];
-}
-
-function summarizeStageBatch(assessment: StageAssessment): string {
-  const flagged = assessment.flaggedDeals.length;
-  const others = assessment.moves.length - flagged;
-  const head = `Mark ${plural(flagged, 'large deal')} as closed-lost`;
-  return others > 0 ? `${head}, and apply ${plural(others, 'other stage move')}` : head;
-}
-
-function lastPerDeal(updates: readonly StageUpdate[]): StageUpdate[] {
-  return [...new Map(updates.map((update) => [update.dealId, update])).values()];
+  return [applyBatchDiscount, terminateContract];
 }

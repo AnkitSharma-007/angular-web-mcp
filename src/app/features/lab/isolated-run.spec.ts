@@ -237,7 +237,6 @@ describe('IsolatedRunner', () => {
       behaviour = async function* () {
         deals.recordSnapshot('10% off');
         deals.applyDiscount(['D-1002', 'D-1003'], 10);
-        deals.moveStages([{ dealId: 'D-1002', stage: 'closed-won' }]);
         deals.terminateContract('D-1001');
         deals.setFilter({ regions: ['EMEA'] });
         proposals.saveDraft(createProposalModel({ dealId: 'D-1001' }));
@@ -416,12 +415,12 @@ describe('IsolatedRunner', () => {
         yield DONE;
       };
 
-      const outcome = await runner.run({ ...RUN, runId: 'eval-act4-1' });
+      const outcome = await runner.run({ ...RUN, runId: 'eval-act3-1' });
 
       const packets = telemetry.entities();
-      expect(outcome.runId).toBe('eval-act4-1');
+      expect(outcome.runId).toBe('eval-act3-1');
       expect(packets.length).toBeGreaterThanOrEqual(4);
-      expect(packets.every((packet) => packet.runId === 'eval-act4-1')).toBe(true);
+      expect(packets.every((packet) => packet.runId === 'eval-act3-1')).toBe(true);
     });
 
     it('stops tagging when the run is over', async () => {

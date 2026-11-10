@@ -28,13 +28,13 @@ describe('AgentHistoryPanel', () => {
   it('lists entries newest first', async () => {
     const { fixture, store, root } = await setup();
     store.recordSnapshot('10% discount on 3 deals');
-    store.recordSnapshot('Stage updates on 1 deal');
+    store.recordSnapshot('Contract terminated');
     await fixture.whenStable();
 
     const labels = [...root.querySelectorAll('[data-testid="entry-label"]')].map((el) =>
       el.textContent?.trim(),
     );
-    expect(labels).toEqual(['Stage updates on 1 deal', '10% discount on 3 deals']);
+    expect(labels).toEqual(['Contract terminated', '10% discount on 3 deals']);
     expect(root.querySelectorAll('time')).toHaveLength(2);
   });
 
@@ -43,14 +43,14 @@ describe('AgentHistoryPanel', () => {
     store.recordSnapshot('first');
     store.applyDiscount(['D-1002'], 10);
     store.recordSnapshot('second');
-    store.moveStages([{ dealId: 'D-1002', stage: 'proposal' }]);
+    store.applyDiscount(['D-1002'], 20);
     await fixture.whenStable();
 
     const buttons = await loader.getAllHarnesses(MatButtonHarness.with({ text: 'Undo to here' }));
     expect(buttons).toHaveLength(2);
     await buttons[1]?.click();
 
-    expect(store.entityMap()['D-1002']).toMatchObject({ discountPct: 0, stage: 'negotiation' });
+    expect(store.entityMap()['D-1002']).toMatchObject({ discountPct: 0 });
     expect(store.history()).toHaveLength(0);
     expect(fixture.nativeElement.querySelector('section')).toBeNull();
   });

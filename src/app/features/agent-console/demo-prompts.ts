@@ -1,8 +1,8 @@
 import type { GeminiModelId } from '../../mcp/agent/gemini/gemini-models';
 
-export type ActId = 'act1' | 'act2' | 'act3' | 'act4';
+export type ActId = 'act1' | 'act2' | 'act3';
 
-export type PromptHotkey = '1' | '2' | '3' | '4';
+export type PromptHotkey = '1' | '2' | '3';
 
 export interface DemoPrompt {
   id: ActId;
@@ -23,22 +23,14 @@ export const DEMO_PROMPTS: readonly DemoPrompt[] = [
   {
     id: 'act2',
     hotkey: '2',
-    label: 'Multi-step',
-    prompt:
-      'Show EMEA deals in Negotiation, give them 10% off, and move anything above 70% probability to Closed Won.',
-    model: 'gemini-3.8-flash',
-  },
-  {
-    id: 'act3',
-    hotkey: '3',
     label: 'Signal Form',
     prompt:
       'Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December.',
     model: 'gemini-3.8-flash',
   },
   {
-    id: 'act4',
-    hotkey: '4',
+    id: 'act3',
+    hotkey: '3',
     label: 'Governance',
     prompt: 'End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract.',
     model: 'gemini-3.8-flash',

@@ -3,9 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SEED_DEALS } from '../../../core/data/seed-deals';
-import { EMPTY_FILTER, isOpen } from '../../../core/models/deal';
 import { CLOCK } from '../../../core/util/clock';
-import { netValue } from '../../../core/util/money';
 import {
   HUMAN_APPROVAL_GATE,
   type ApprovalDecision,
@@ -21,7 +19,6 @@ const REASON = 'Quarter-end push';
 interface MutationOutput {
   status: string;
   changed?: { id: string; before: unknown; after: unknown }[];
-  moved?: { id: string; before: unknown; after: unknown }[];
   skipped: { id: string; why: string }[];
   revenueImpact?: number;
 }
@@ -67,24 +64,15 @@ describe('deal mutation tools', () => {
   describe('registration', () => {
     beforeEach(() => setup(false));
 
-    it('registers four tools with strict schemas and the right hints', () => {
+    it('registers two tools with strict schemas and the right hints', () => {
       const tools = registry.current.toolInfos();
-      expect(tools.map((tool) => tool.name)).toEqual([
-        'applyBatchDiscount',
-        'setDealFilter',
-        'terminateContract',
-        'updateDealStages',
-      ]);
+      expect(tools.map((tool) => tool.name)).toEqual(['applyBatchDiscount', 'terminateContract']);
       for (const tool of tools) {
         expect(tool.inputSchema?.additionalProperties).toBe(false);
         expect(tool.description.length).toBeGreaterThan(80);
       }
       const hinted = tools.filter((tool) => tool.annotations?.['consequentialHint'] === true);
-      expect(hinted.map((tool) => tool.name)).toEqual([
-        'applyBatchDiscount',
-        'terminateContract',
-        'updateDealStages',
-      ]);
+      expect(hinted.map((tool) => tool.name)).toEqual(['applyBatchDiscount', 'terminateContract']);
     });
 
     it('requires a reason of 3-200 characters on every mutation', async () => {
@@ -94,9 +82,7 @@ describe('deal mutation tools', () => {
       await expect(
         call('applyBatchDiscount', { ...args, reason: 'x'.repeat(201) }),
       ).rejects.toThrow('reason');
-      await expect(
-        call('updateDealStages', { updates: [{ dealId: 'D-1004', stage: 'proposal' }] }),
-      ).rejects.toThrow('reason');
+      await expect(call('terminateContract', { dealId: 'D-1003' })).rejects.toThrow('reason');
       expect(store.canUndo()).toBe(false);
     });
   });
@@ -301,16 +287,6 @@ describe('deal mutation tools', () => {
       expect(undos).toHaveLength(1);
     });
 
-    it('offers Undo for stage updates as well', async () => {
-      setup(false);
-      await call('updateDealStages', {
-        updates: [{ dealId: 'D-1002', stage: 'proposal' }],
-        reason: REASON,
-      });
-      actions[0]?.next();
-      expect(store.entityMap()['D-1002']?.stage).toBe('negotiation');
-    });
-
     it('singularises the snackbar for one deal', async () => {
       setup(false);
       await call('applyBatchDiscount', { dealIds: ['D-1002'], discountPct: 5, reason: REASON });
@@ -318,210 +294,6 @@ describe('deal mutation tools', () => {
     });
   });
 
-  describe('updateDealStages', () => {
-    const smallOpen = SEED_DEALS.find((deal) => isOpen(deal) && netValue(deal) <= 100_000);
-
-    it('moves what it can and reports the rest as skipped', async () => {
-      setup(false);
-      const output = await call('updateDealStages', {
-        updates: [
-          { dealId: 'D-1002', stage: 'proposal' },
-          { dealId: 'D-1001', stage: 'prospecting' },
-          { dealId: 'D-9999', stage: 'proposal' },
-          { dealId: 'D-1004', stage: 'negotiation' },
-        ],
-        reason: REASON,
-      });
-
-      expect(output.status).toBe('partial');
-      expect(output.moved).toEqual([{ id: 'D-1002', before: 'negotiation', after: 'proposal' }]);
-      expect(output.skipped).toEqual([
-        { id: 'D-1001', why: 'closed deals cannot be reopened' },
-        { id: 'D-9999', why: 'unknown deal' },
-        { id: 'D-1004', why: 'already in negotiation' },
-      ]);
-      expect(store.entityMap()['D-1002']?.stage).toBe('proposal');
-      expect(store.entityMap()['D-1001']?.stage).toBe('closed-won');
-      expect(open.mock.calls[0]?.[0]).toBe('Agent moved 1 deal to a new stage');
-    });
-
-    it('reports no_change when nothing moves, without a snackbar', async () => {
-      setup(false);
-      const output = await call('updateDealStages', {
-        updates: [{ dealId: 'D-1004', stage: 'negotiation' }],
-        reason: REASON,
-      });
-      expect(output.status).toBe('no_change');
-      expect(open).not.toHaveBeenCalled();
-    });
-
-    it('keeps only the last update for a deal listed twice', async () => {
-      setup(false);
-      const output = await call('updateDealStages', {
-        updates: [
-          { dealId: 'D-1002', stage: 'qualification' },
-          { dealId: 'D-1002', stage: 'proposal' },
-        ],
-        reason: REASON,
-      });
-      expect(output.moved).toEqual([{ id: 'D-1002', before: 'negotiation', after: 'proposal' }]);
-      expect(store.lastEntry()?.label).toBe('Stage updates on 1 deal');
-    });
-
-    it('rejects more than 25 updates and unknown stages', async () => {
-      setup(false);
-      const updates = Array.from({ length: 26 }, (_, i) => ({
-        dealId: `D-${1001 + i}`,
-        stage: 'proposal',
-      }));
-      await expect(call('updateDealStages', { updates, reason: REASON })).rejects.toThrow(
-        'updates',
-      );
-      await expect(
-        call('updateDealStages', {
-          updates: [{ dealId: 'D-1002', stage: 'won' }],
-          reason: REASON,
-        }),
-      ).rejects.toThrow('updates[0].stage');
-      expect(store.entities()).toEqual(SEED_DEALS);
-    });
-
-    it('rejects closing a deal over $100k as lost when no gate exists', async () => {
-      setup(false);
-      const output = await call<{ status: string }>('updateDealStages', {
-        updates: [{ dealId: 'D-1002', stage: 'closed-lost' }],
-        reason: REASON,
-      });
-      expect(output.status).toBe('rejected_by_human');
-      expect(store.entityMap()['D-1002']?.stage).toBe('negotiation');
-      expect(store.canUndo()).toBe(false);
-    });
-
-    it('asks the gate and closes the deal on approval', async () => {
-      setup(true);
-      request.mockResolvedValue({ approved: true });
-      const output = await call('updateDealStages', {
-        updates: [{ dealId: 'D-1002', stage: 'closed-lost' }],
-        reason: REASON,
-      });
-      expect(request.mock.calls[0]?.[0]).toMatchObject({
-        toolName: 'updateDealStages',
-        risk: 'high',
-        summary: 'Mark 1 large deal as closed-lost',
-        details: { deals: [{ id: 'D-1002', netValue: 420_000 }] },
-      });
-      expect(output.status).toBe('applied');
-      expect(store.entityMap()['D-1002']).toMatchObject({ stage: 'closed-lost', probability: 0 });
-    });
-
-    it('shows every move in a mixed batch, flagged first, and commits exactly those', async () => {
-      setup(true);
-      request.mockResolvedValue({ approved: true });
-      expect(smallOpen).toBeDefined();
-      const output = await call('updateDealStages', {
-        updates: [
-          { dealId: smallOpen?.id, stage: 'closed-won' },
-          { dealId: 'D-1002', stage: 'closed-lost' },
-          { dealId: 'D-1001', stage: 'closed-lost' },
-          { dealId: 'D-9999', stage: 'closed-lost' },
-        ],
-        reason: REASON,
-      });
-
-      const asked = request.mock.calls[0]?.[0];
-      expect(asked?.summary).toBe('Mark 1 large deal as closed-lost, and apply 1 other stage move');
-      expect(asked?.diff?.map((row) => row.label)).toEqual([
-        expect.stringContaining('D-1002'),
-        expect.stringContaining(smallOpen?.id ?? ''),
-      ]);
-      expect(asked?.diff?.[0]).toMatchObject({ before: 'Negotiation', after: 'Closed Lost' });
-      expect(asked?.diff?.[0]?.note).toContain('Probability set to 0%');
-      expect(asked?.diff?.[1]).toMatchObject({ after: 'Closed Won' });
-      expect(asked?.diff?.[1]?.note).toContain('contract is activated');
-
-      const committed = (output.moved ?? []).map((move) => move.id).sort();
-      expect(committed).toEqual(
-        [...(asked?.diff ?? []).map((row) => /\((D-\d+)\)/.exec(row.label)?.[1] ?? '')].sort(),
-      );
-      expect(output.skipped.map((entry) => entry.id).sort()).toEqual(['D-1001', 'D-9999']);
-      expect(store.entityMap()['D-1001']?.stage).toBe('closed-won');
-    });
-
-    it('does not need approval for a small deal or a non-lost stage', async () => {
-      setup(true);
-      expect(smallOpen).toBeDefined();
-      await call('updateDealStages', {
-        updates: [
-          { dealId: smallOpen?.id, stage: 'closed-lost' },
-          { dealId: 'D-1002', stage: 'closed-won' },
-        ],
-        reason: REASON,
-      });
-      expect(request).not.toHaveBeenCalled();
-      expect(store.entityMap()['D-1002']?.stage).toBe('closed-won');
-    });
-  });
-
-  describe('setDealFilter', () => {
-    beforeEach(() => setup(true));
-
-    it('applies stages and regions and reports the visible count', async () => {
-      const output = await call<{ applied: unknown; visibleCount: number }>('setDealFilter', {
-        stages: ['negotiation'],
-        regions: ['EMEA'],
-      });
-      expect(output.visibleCount).toBe(EMEA_NEGOTIATION.length);
-      expect(output.applied).toEqual({
-        ...EMPTY_FILTER,
-        stages: ['negotiation'],
-        regions: ['EMEA'],
-      });
-      expect(store.filteredDeals().map((deal) => deal.id)).toEqual(
-        expect.arrayContaining(EMEA_NEGOTIATION),
-      );
-    });
-
-    it('merges into the current filter and can set a minimum value and query', async () => {
-      await call('setDealFilter', { regions: ['EMEA'] });
-      const output = await call<{ applied: { regions: string[]; minValue: number } }>(
-        'setDealFilter',
-        { minValue: 300_000, query: 'bank' },
-      );
-      expect(output.applied).toMatchObject({ regions: ['EMEA'], minValue: 300_000, query: 'bank' });
-    });
-
-    it('clears first when asked, keeping only the newly provided fields', async () => {
-      await call('setDealFilter', { regions: ['EMEA'], stages: ['negotiation'] });
-      const output = await call<{ applied: unknown; visibleCount: number }>('setDealFilter', {
-        clear: true,
-        query: 'arcadia',
-      });
-      expect(output.applied).toEqual({ ...EMPTY_FILTER, query: 'arcadia' });
-      expect(output.visibleCount).toBe(1);
-    });
-
-    it('resets to every deal with clear alone', async () => {
-      await call('setDealFilter', { regions: ['APAC'] });
-      const output = await call<{ applied: unknown; visibleCount: number }>('setDealFilter', {
-        clear: true,
-      });
-      expect(output.applied).toEqual(EMPTY_FILTER);
-      expect(output.visibleCount).toBe(SEED_DEALS.length);
-    });
-
-    it('is view-only: no snapshot, no approval, no snackbar, deals untouched', async () => {
-      await call('setDealFilter', { stages: ['closed-lost'], minValue: 1 });
-      expect(store.canUndo()).toBe(false);
-      expect(request).not.toHaveBeenCalled();
-      expect(open).not.toHaveBeenCalled();
-      expect(store.entities()).toEqual(SEED_DEALS);
-    });
-
-    it('rejects unknown stages and extra properties', async () => {
-      await expect(call('setDealFilter', { stages: ['won'] })).rejects.toThrow('stages[0]');
-      await expect(call('setDealFilter', { reason: 'because' })).rejects.toThrow();
-    });
-  });
   describe('terminateContract', () => {
     const ARGS = { dealId: 'D-1001', reason: 'Customer asked to cancel' };
 
@@ -636,24 +408,6 @@ describe('deal mutation tools', () => {
       expect(diff?.map((row) => [row.label, row.before, row.after, row.note])).toEqual([
         ['Arcadia Bank (D-1002)', '0%', '20%', '-$84k'],
         [expect.stringMatching(/\(D-1005\)$/), '0%', '20%', expect.stringMatching(/^-\$/)],
-      ]);
-    });
-
-    it('lists each large deal that would be closed lost with its current stage and effects', async () => {
-      setup(true);
-      request.mockResolvedValue({ approved: false });
-      await call('updateDealStages', {
-        updates: [{ dealId: 'D-1002', stage: 'closed-lost' }],
-        reason: REASON,
-      });
-      expect(request.mock.calls[0]?.[0].diff).toEqual([
-        {
-          label: 'Arcadia Bank (D-1002)',
-          field: 'Stage',
-          before: 'Negotiation',
-          after: 'Closed Lost',
-          note: '$420k net value. Probability set to 0%',
-        },
       ]);
     });
   });

@@ -1,10 +1,8 @@
 import { makeDeal } from '../../../../testing/deal-fixtures';
 import {
-  CLOSED_LOST_APPROVAL_USD,
   DISCOUNT_APPROVAL_PCT,
   IMPACT_APPROVAL_USD,
   assessDiscount,
-  assessStageMoves,
   discountImpact,
 } from './risk-policy';
 
@@ -54,47 +52,5 @@ describe('assessDiscount', () => {
   it('computes the impact from list value and the percentage delta', () => {
     expect(discountImpact(420_000, 0, 10)).toBe(-42_000);
     expect(discountImpact(420_000, 10, 0)).toBe(42_000);
-  });
-});
-
-describe('assessStageMoves', () => {
-  const entities = {
-    big: makeDeal({ id: 'D-3010', account: 'Big', listValue: 250_000 }),
-    edge: makeDeal({ id: 'D-3011', listValue: CLOSED_LOST_APPROVAL_USD }),
-    discounted: makeDeal({ id: 'D-3012', listValue: 120_000, discountPct: 20 }),
-    closed: makeDeal({ id: 'D-3013', listValue: 900_000, stage: 'closed-won' }),
-  };
-  const byId = Object.fromEntries(Object.values(entities).map((deal) => [deal.id, deal]));
-
-  it('flags an open deal over $100k moving to closed-lost', () => {
-    const assessment = assessStageMoves(byId, [{ dealId: 'D-3010', stage: 'closed-lost' }]);
-    expect(assessment.flaggedDeals).toEqual([{ id: 'D-3010', account: 'Big', netValue: 250_000 }]);
-    expect(assessment.flags).toEqual(['1 deal over $100k would be marked closed-lost']);
-  });
-
-  it('uses net value, so exactly $100k and discounted deals pass', () => {
-    const moves = ['D-3011', 'D-3012'].map((dealId) => ({
-      dealId,
-      stage: 'closed-lost' as const,
-    }));
-    expect(assessStageMoves(byId, moves).flags).toEqual([]);
-  });
-
-  it('ignores other target stages, closed deals and unknown ids', () => {
-    const moves = [
-      { dealId: 'D-3010', stage: 'closed-won' as const },
-      { dealId: 'D-3013', stage: 'closed-lost' as const },
-      { dealId: 'D-9999', stage: 'closed-lost' as const },
-    ];
-    expect(assessStageMoves(byId, moves).flaggedDeals).toEqual([]);
-  });
-
-  it('pluralises the message', () => {
-    const second = makeDeal({ id: 'D-3014', listValue: 500_000 });
-    const assessment = assessStageMoves({ ...byId, [second.id]: second }, [
-      { dealId: 'D-3010', stage: 'closed-lost' },
-      { dealId: 'D-3014', stage: 'closed-lost' },
-    ]);
-    expect(assessment.flags).toEqual(['2 deals over $100k would be marked closed-lost']);
   });
 });

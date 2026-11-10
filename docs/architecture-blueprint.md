@@ -9,7 +9,9 @@
 >
 > **Status:** ✅ Approved. Implemented session by session (§8).
 >
-> **Revision 2026-11-10:** the Lab's Model Race, the 🧠 Strategist model, the free/paid-tier badges and the inspector's per-model table (`byModel`) were removed to keep the app focused on WebMCP. The Lab keeps the scored act evals. The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
+> **Revision 2026-11-10:** the Lab's Model Race, the 🧠 Strategist model, the free/paid-tier badges and the inspector's per-model table (`byModel`) were removed to keep the app focused on WebMCP. The Lab keeps the scored act evals.
+>
+> **Revision 2026-11-10 (2):** the demo is now 9 minutes in a 30-minute session. Act 2 (Multi-step) was removed together with its `setDealFilter` and `updateDealStages` tools, the stage-move logic and the prompt-gated eval steps. The acts are now 1 Context, 2 Signal Form and 3 Governance; the dashboard route exposes 6 tools (7 while the proposal drawer is open). The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
 
 ---
 
@@ -157,9 +159,8 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
 ╔════════╧══════════════════╧═════════════════════╧═══════════╧════════════════│══════╗
 ║ ANGULAR WebMCP                                                               │      ║
 ║ ① provideExperimentalWebMcpTools (route)   getPipelineSummary · searchDeals · getDealDetails
-║ ② withWebMcpTools() store feature          setDealFilter · applyBatchDiscount ·      ║
-║    → declareExperimentalWebMcpTool(t, inj)  updateDealStages · terminateContract ·   ║
-║                                             openProposalDrawer                       ║
+║ ② withWebMcpTools() store feature          applyBatchDiscount · terminateContract ·  ║
+║    → declareExperimentalWebMcpTool(t, inj)  openProposalDrawer                       ║
 ║ ③ Signal Forms experimentalWebMcpTool      draftDealProposal (dynamic)              ║
 ║ defineTool(): telemetry → validation → human approval → snapshot → run ─────┘      ║
 ╚═══════════════════════════════════╪═══════════════════╪═════════════════════════════╝
@@ -377,14 +378,12 @@ Inside `execute(args, { signal })`:
 | `searchDeals`        | `{ stages?, regions?, minValue?, maxValue?, minProbability?, stalledOnly?, query?, limit? 1–25 }` | `readOnlyHint`                         | `{ total, deals: [{ id, account, region, stage, netValue, discountPct, probability, lastActivityDays }] }` |
 | `getDealDetails`     | `{ dealId: ^D-\d{4}$ }`                                                                           | `readOnlyHint`, `untrustedContentHint` | the full `Deal`. An unknown ID → an `isError` result (`ToolInputError` text)                               |
 
-### 4.2 ② Mutation tools: Acts 2 and 4 (`withWebMcpTools` on `DealsStore`)
+### 4.2 ② Mutation tools: Act 3 (`withWebMcpTools` on `DealsStore`)
 
-| Tool                 | Input                                              | Annotations         | Needs approval when                                   | Output                                                  |
-| -------------------- | -------------------------------------------------- | ------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| `setDealFilter`      | `{ stages?, regions?, minValue?, query?, clear? }` | —                   | never (view state, no snapshot)                       | `{ applied, visibleCount }`                             |
-| `applyBatchDiscount` | `{ dealIds[1..25], discountPct 0–50, reason }`     | `consequentialHint` | the discount is over 15 % or the impact is over $250k | `{ status, changed[{id,before,after}], revenueImpact }` |
-| `updateDealStages`   | `{ updates[1..25]{dealId,stage}, reason }`         | `consequentialHint` | a deal over $100k moves to `closed-lost`              | `{ status, moved[], skipped[{id,why}] }`                |
-| `terminateContract`  | `{ dealId, reason }`                               | `consequentialHint` | always (critical)                                     | `{ status, dealId, terminatedAt }`                      |
+| Tool                 | Input                                          | Annotations         | Needs approval when                                   | Output                                                  |
+| -------------------- | ---------------------------------------------- | ------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `applyBatchDiscount` | `{ dealIds[1..25], discountPct 0–50, reason }` | `consequentialHint` | the discount is over 15 % or the impact is over $250k | `{ status, changed[{id,before,after}], revenueImpact }` |
+| `terminateContract`  | `{ dealId, reason }`                           | `consequentialHint` | always (critical)                                     | `{ status, dealId, terminatedAt }`                      |
 
 ### 4.3 Human-in-the-loop gate
 
@@ -512,7 +511,7 @@ interface WirePacket {
 | Persona               | Model ID                | `thinkingLevel` | $ / 1M in / out                           | Role              |
 | --------------------- | ----------------------- | --------------- | ----------------------------------------- | ----------------- |
 | ⚡ Sprinter           | `gemini-3.5-flash-lite` | low             | 0.30 / 2.50                               | Act 1, fast reads |
-| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium          | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Acts 2–4          |
+| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium          | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Acts 2 and 3      |
 
 - Both have a ~1M-token context window. The contrasts are latency, reasoning depth, tool calls and cost.
 - The catalog stores dated `priceSchedule[]` entries, and every run shows its cost.
@@ -521,17 +520,15 @@ interface WirePacket {
 
 ---
 
-## 5. Live-Demo Arc (12–15 min, all live)
+## 5. Live-Demo Arc (9 min, all live, inside a 30-minute session)
 
-| Time        | Act                      | Prompt (chip)                                                                                               | Tools                                                               | Audience sees                                                                                    |
-| ----------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 0:00–1:30   | Cold open                | —                                                                                                           | —                                                                   | The Inspector Tools tab shows 8 tools. Go to `/about` and they vanish; come back and they return |
-| 1:30–4:00   | **1 · Context** (⚡)     | "Give me a pipeline summary — where are we exposed this quarter?"                                           | getPipelineSummary, searchDeals                                     | Fast streamed answer and thoughts                                                                |
-| 4:00–7:00   | **2 · Multi-step** (🛠️)  | "Show EMEA deals in Negotiation, give them 10% off, and move anything above 70% probability to Closed Won." | setDealFilter → searchDeals → applyBatchDiscount → updateDealStages | The table filters, bars animate, KPIs tick, and an UNDO snackbar appears                         |
-| 7:00–9:30   | **3 · Signal Form** (🛠️) | "Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December."                 | openProposalDrawer → _toolchange_ → draftDealProposal ✗ → ✓         | A new tool appears, fields glow as they fill, and the agent fixes the start date                 |
-| 9:30–12:00  | **4 · Governance** (🛠️)  | "End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract."                      | applyBatchDiscount ⏸ Approve; terminateContract ⏸ Reject            | The agent pauses on a diff dialog and adapts. Then Undo rolls the chart back                     |
-| 12:00–14:00 | **Wire**                 | Inspector: Packets and Stats                                                                                | —                                                                   | Channel, latency, tokens and $ per packet; tool-call p50 / p95 and human wait                    |
-| 14:00–15:00 | Close                    | —                                                                                                           | —                                                                   | The registration styles, `withWebMcpTools()`, and the change history                             |
+| Time      | Act                      | Prompt (chip)                                                                               | Tools                                                         | Audience sees                                                                                    |
+| --------- | ------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 0:00–1:00 | Cold open                | —                                                                                           | —                                                             | The Inspector Tools tab shows 6 tools. Go to `/about` and they vanish; come back and they return |
+| 1:00–2:30 | **1 · Context** (⚡)     | "Give me a pipeline summary — where are we exposed this quarter?"                           | getPipelineSummary, searchDeals                               | Fast streamed answer and thoughts                                                                |
+| 2:30–5:30 | **2 · Signal Form** (🛠️) | "Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December." | openProposalDrawer → _toolchange_ → draftDealProposal (✗ → ✓) | A new tool appears, fields glow as they fill, and the agent may fix the start date               |
+| 5:30–8:30 | **3 · Governance** (🛠️)  | "End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract."      | applyBatchDiscount ⏸ Approve; terminateContract ⏸ Reject      | The agent pauses on a diff dialog and adapts. Then Undo rolls the chart back                     |
+| 8:30–9:00 | Hand back                | —                                                                                           | —                                                             | The inspector stays open on the packets while the slides take over                               |
 
 ### 5.1 WebMCP feature notes per act
 
@@ -544,34 +541,32 @@ interface WirePacket {
   - Arguments are validated by us, because Angular doesn't validate them.
   - The agent discovers with `getTools()` and runs `executeTool(descriptor, …)`; the gateway holds the descriptors.
 - **Act 2:**
-  - Registration style ②, `withWebMcpTools()` → `declareExperimentalWebMcpTool(tool, storeInjector)`, so the tools live as long as the store.
-  - `consequentialHint` on the mutations.
-  - `execute`'s `{ signal }` combines the agent's abort with injector destruction, so Stop cancels the call in flight.
-- **Act 3:**
   - Registration style ③, with `provideExperimentalWebMcpForms()`, `form(…, { experimentalWebMcpTool })` and `[formField]`.
   - Rendering the drawer registers the tool and destroying it unregisters it, each time with a `toolchange`.
   - The schema is inferred as types only. `value.set(args)` fills the UI, then `submit()` runs.
   - Validation errors go back to the agent, which retries.
   - Gotcha: omitted keys become `undefined`, hence every field is `required()`.
-- **Act 4:**
+- **Act 3:**
+  - Registration style ②, `withWebMcpTools()` → `declareExperimentalWebMcpTool(tool, storeInjector)`, so the tools live as long as the store.
   - `consequentialHint`, and an async `execute` that stays pending while the dialog is open.
   - The abort signal counts as a rejection, and a rejection is a result, not an error.
   - The gate is inside the tool, so it also protects external agents. Undo is human-only.
-- **Act 5:**
-  - Client registry calls traced by the gateway, with the same 9 tools served to different models.
+  - `execute`'s `{ signal }` combines the agent's abort with injector destruction, so Stop cancels the call in flight.
+- **Hand back:**
+  - Client registry calls traced by the gateway.
   - JSON-RPC framing is a visual convention only; say so on stage.
 
 ### 5.2 Lab-driven prompt tuning
 
 There is no fallback, so reliability is **measured and tuned**. The Lab (`/dashboard/lab`) runs act prompts against the live API many times, scores every run, and links failures to their packets. Only text the model reads is tuned; business logic never changes to pass an eval.
 
-| Knob                  | Location                                                      | Example                                                                 |
-| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Tool description      | `tools/*.ts`, form options                                    | "Use `setDealFilter` to change the view; use `searchDeals` to find IDs" |
-| Argument descriptions | `inputSchema` (reaches Gemini through `parametersJsonSchema`) | "`discountPct`: the final percentage, not an increment"                 |
-| System prompt         | `system-prompt.ts`                                            | "Look up IDs before mutating; never retry a rejected action"            |
-| Stage prompt wording  | `demo-prompts.ts`                                             | "above 70% probability" rather than "likely"                            |
-| Model per act         | the chip                                                      | ⚡ for Act 1, 🛠️ for Acts 2–4                                           |
+| Knob                  | Location                                                      | Example                                                         |
+| --------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- |
+| Tool description      | `tools/*.ts`, form options                                    | "Use `openProposalDrawer` first; use `searchDeals` to find IDs" |
+| Argument descriptions | `inputSchema` (reaches Gemini through `parametersJsonSchema`) | "`discountPct`: the final percentage, not an increment"         |
+| System prompt         | `system-prompt.ts`                                            | "Look up IDs before mutating; never retry a rejected action"    |
+| Stage prompt wording  | `demo-prompts.ts`                                             | "above 70% probability" rather than "likely"                    |
+| Model per act         | the chip                                                      | ⚡ for Act 1, 🛠️ for Acts 2 and 3                               |
 
 ```ts
 interface ActEval {

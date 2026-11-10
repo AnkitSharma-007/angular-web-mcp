@@ -25,7 +25,7 @@ describe('PresenterActions', () => {
     const { presenter, layout } = setup();
     expect(presenter.fillChip('2')).toBe(true);
     expect(presenter.draft()).toMatchObject({
-      text: expect.stringContaining('EMEA deals in Negotiation'),
+      text: expect.stringContaining('Konkan Freight'),
       model: 'gemini-3.8-flash',
     });
     expect(layout.consoleOpen()).toBe(true);
@@ -59,8 +59,9 @@ describe('PresenterActions', () => {
 
   it('fills a chip with the number keys', () => {
     const { presenter } = setup();
-    expect(presenter.handleKey(press('4'))).toBe(true);
+    expect(presenter.handleKey(press('3'))).toBe(true);
     expect(presenter.draft()?.text).toContain('Arcadia Bank');
+    expect(presenter.handleKey(press('4'))).toBe(false);
   });
 
   it('resets on Shift+R: clears the session and the draft and runs the handlers', () => {

@@ -317,7 +317,7 @@ describe('AgentConsole', () => {
       const { script } = pausedRun();
       const { fixture, q, pending } = setup({ script });
       await fixture.whenStable();
-      q<HTMLButtonElement>('chip-act4')?.click();
+      q<HTMLButtonElement>('chip-act3')?.click();
       await settle(fixture);
       pending.set({ toolName: 'terminateContract', risk: 'critical', summary: 'Terminate' });
       await settle(fixture);

@@ -14,7 +14,6 @@ export interface ActEval {
   prompts: readonly string[];
   model: GeminiModelId;
   requiredSequence: readonly string[];
-  promptGatedSteps?: Readonly<Record<string, RegExp>>;
   allowedExtras: AllowedExtras;
   forbidden: readonly string[];
   approvals?: readonly ScriptedDecision[];
@@ -25,7 +24,6 @@ export const NON_MUTATING_TOOLS: ReadonlySet<string> = new Set([
   'getPipelineSummary',
   'searchDeals',
   'getDealDetails',
-  'setDealFilter',
   'openProposalDrawer',
 ]);
 
@@ -43,34 +41,7 @@ function assertAct1(deals: DealsView): string | null {
     : null;
 }
 
-function assertAct2(deals: DealsView): string | null {
-  const seed = createSeedDeals();
-  const now = new Map(deals.deals.map((deal) => [deal.id, deal]));
-  const targets = seed.filter((deal) => deal.region === 'EMEA' && deal.stage === 'negotiation');
-  for (const target of targets) {
-    const deal = now.get(target.id);
-    const expectedStage = target.probability > 70 ? 'closed-won' : 'negotiation';
-    if (!deal) {
-      return `${target.id} is missing`;
-    }
-    if (deal.discountPct !== 10) {
-      return `${target.id} (${target.account}) has ${deal.discountPct}% discount, expected 10%`;
-    }
-    if (deal.stage !== expectedStage) {
-      return `${target.id} (${target.account}) is ${deal.stage}, expected ${expectedStage}`;
-    }
-  }
-  const inScope = new Set(targets.map((deal) => deal.id));
-  for (const original of seed.filter((deal) => !inScope.has(deal.id))) {
-    const deal = now.get(original.id);
-    if (deal?.discountPct !== original.discountPct || deal.stage !== original.stage) {
-      return `${original.id} (${original.account}) changed but was out of scope`;
-    }
-  }
-  return null;
-}
-
-function assertAct3(deals: DealsView, proposals: ProposalsView): string | null {
+function assertAct2(deals: DealsView, proposals: ProposalsView): string | null {
   const [draft, ...rest] = proposals.drafts;
   if (!draft) {
     return 'No proposal draft was saved';
@@ -90,7 +61,7 @@ function assertAct3(deals: DealsView, proposals: ProposalsView): string | null {
   return problems[0] ?? null;
 }
 
-function assertAct4(deals: DealsView): string | null {
+function assertAct3(deals: DealsView): string | null {
   const arcadia = deals.deals.find((deal) => deal.account === 'Arcadia Bank');
   const monsoon = deals.deals.find((deal) => deal.account === 'Monsoon Retail');
   if (arcadia?.discountPct !== 25) {
@@ -114,52 +85,37 @@ export const ACT_EVALS: readonly ActEval[] = [
     model: demoPromptFor('act1').model,
     requiredSequence: ['getPipelineSummary'],
     allowedExtras: 'read-only',
-    forbidden: ['applyBatchDiscount', 'updateDealStages', 'terminateContract', 'draftDealProposal'],
+    forbidden: ['applyBatchDiscount', 'terminateContract', 'draftDealProposal'],
     assertState: assertAct1,
   },
   {
     id: 'act2',
-    label: 'Act 2 · Multi-step',
+    label: 'Act 2 · Signal Form',
     prompts: [
       demoPromptFor('act2').prompt,
-      'Filter to EMEA deals in the negotiation stage, apply a 10% discount to them, then mark every one with probability above 70% as closed won.',
-      'For EMEA negotiation deals: take 10% off, and close-win the ones over 70% probability.',
+      'Please prepare a proposal for Konkan Freight: Enterprise tier, 250 seats, 24 months, starting mid-December.',
+      'Draft an Enterprise renewal for Konkan Freight, two years, 250 seats, beginning around the middle of December.',
     ],
     model: demoPromptFor('act2').model,
-    requiredSequence: ['setDealFilter', 'searchDeals', 'applyBatchDiscount', 'updateDealStages'],
-    promptGatedSteps: { setDealFilter: /\b(show|filter)\b/i },
+    requiredSequence: ['openProposalDrawer', 'draftDealProposal'],
     allowedExtras: 'read-only',
-    forbidden: ['terminateContract', 'draftDealProposal'],
+    forbidden: ['applyBatchDiscount', 'terminateContract'],
     assertState: assertAct2,
   },
   {
     id: 'act3',
-    label: 'Act 3 · Signal Form',
+    label: 'Act 3 · Governance',
     prompts: [
       demoPromptFor('act3').prompt,
-      'Please prepare a proposal for Konkan Freight: Enterprise tier, 250 seats, 24 months, starting mid-December.',
-      'Draft an Enterprise renewal for Konkan Freight, two years, 250 seats, beginning around the middle of December.',
-    ],
-    model: demoPromptFor('act3').model,
-    requiredSequence: ['openProposalDrawer', 'draftDealProposal'],
-    allowedExtras: 'read-only',
-    forbidden: ['applyBatchDiscount', 'updateDealStages', 'terminateContract'],
-    assertState: assertAct3,
-  },
-  {
-    id: 'act4',
-    label: 'Act 4 · Governance',
-    prompts: [
-      demoPromptFor('act4').prompt,
       "It's quarter end: Arcadia Bank gets a 25% discount and the Monsoon Retail contract must be terminated.",
       'Give Arcadia Bank 25 percent off and end the contract with Monsoon Retail.',
     ],
-    model: demoPromptFor('act4').model,
+    model: demoPromptFor('act3').model,
     requiredSequence: ['applyBatchDiscount', 'terminateContract'],
     allowedExtras: 'read-only',
-    forbidden: ['updateDealStages', 'draftDealProposal'],
+    forbidden: ['draftDealProposal'],
     approvals: ['approve', 'reject'],
-    assertState: assertAct4,
+    assertState: assertAct3,
   },
 ];
 
@@ -189,11 +145,6 @@ function firstMissing(required: readonly string[], names: readonly string[]): st
   return null;
 }
 
-export function requiredSequenceFor(spec: ActEval, prompt: string): readonly string[] {
-  const gates = spec.promptGatedSteps ?? {};
-  return spec.requiredSequence.filter((tool) => gates[tool]?.test(prompt) ?? true);
-}
-
 function stateFailure(spec: ActEval, outcome: RunOutcome): string | null {
   try {
     return spec.assertState(outcome.deals, outcome.proposals);
@@ -205,7 +156,7 @@ function stateFailure(spec: ActEval, outcome: RunOutcome): string | null {
 export function scoreRun(spec: ActEval, outcome: RunOutcome): RunScore {
   const failures: string[] = [];
   const names = outcome.toolCalls.map((call) => call.name);
-  const sequence = requiredSequenceFor(spec, outcome.prompt);
+  const sequence = spec.requiredSequence;
   const required = new Set(sequence);
 
   if (outcome.error) {

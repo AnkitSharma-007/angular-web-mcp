@@ -26,10 +26,10 @@ Open <http://localhost:4200>, then:
 
 1. Click the **key** icon in the toolbar, paste a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) and pick a model.
 2. Open **Agent console** on the dashboard.
-3. Click a demo chip (**Context**, **Multi-step**, **Signal Form**, **Governance**), or ask your own question.
+3. Click a demo chip (**Context**, **Signal Form**, **Governance**), or ask your own question.
 4. Press `` ` `` to open the wire inspector and watch the traffic.
 
-Presenter keys: `1`–`4` fill a demo prompt, `` ` `` toggles the inspector, `Shift+R` resets the demo. See the [stage run-sheet](docs/demo-script.md).
+Presenter keys: `1`–`3` fill a demo prompt, `` ` `` toggles the inspector, `Shift+R` resets the demo. See the [stage run-sheet](docs/demo-script.md).
 
 You can use the tools without a key. Any WebMCP client in your browser (Chrome's agent, a tool-inspector extension) sees the same tools. Only the in-app console needs a key.
 
@@ -52,7 +52,7 @@ The app has no server. The in-app agent calls the Gemini API straight from your 
 | Persona               | Model ID                | Thinking | $ per 1M tokens (in / out)                | Use it for                   |
 | --------------------- | ----------------------- | -------- | ----------------------------------------- | ---------------------------- |
 | ⚡ Sprinter           | `gemini-3.5-flash-lite` | low      | 0.30 / 2.50                               | Fast reads and quick answers |
-| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium   | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Multi-step tool work         |
+| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium   | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Tool-driven work             |
 
 Prices verified 2026-11-09 against the [model list](https://aistudio.google.com/docs/models) and [pricing](https://aistudio.google.com/docs/pricing). The catalog keeps dated price schedules, so the picker always shows the price in force today. Every run shows its token usage and cost; thinking tokens are billed at the output rate.
 
@@ -90,7 +90,7 @@ Layering is `core ◄ mcp ◄ features ► shared`, enforced by ESLint. `mcp/` h
 | Wire inspector                   | Packets, registered tools and tool-call stats, with JSON-RPC framing as a display convention                   |
 | Lab (`/dashboard/lab`)           | Scored act evals, to tune the text the model reads                                                             |
 
-The demo has four acts: **Context** (read tools), **Multi-step** (filter, discount, close), **Signal Form** (a tool that appears when a drawer opens, and an agent that fixes its own mistake) and **Governance** (approve one change, reject another, undo).
+The demo has three acts: **Context** (read tools), **Signal Form** (a tool that appears when a drawer opens, and an agent that can fix its own mistake) and **Governance** (approve one change, reject another, undo).
 
 Read the [architecture blueprint](docs/architecture-blueprint.md) for the decisions and the session-by-session build log.
 
@@ -158,7 +158,7 @@ npm run build
 ```
 
 - No test touches the network: `fetch` throws, and the Gemini client is always replaced by a fake that streams scripted turns.
-- The act acceptance suite (`src/app/demo-acts.spec.ts`) plays all four acts on one app through the real console, tools, forms and approval dialog.
+- The act acceptance suite (`src/app/demo-acts.spec.ts`) plays all three acts on one app through the real console, tools, forms and approval dialog.
 - Interactive components are checked with axe. jsdom skips colour contrast, so run Lighthouse before a talk.
 
 CI runs the tests on every push to `main`.

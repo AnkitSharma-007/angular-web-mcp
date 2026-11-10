@@ -204,7 +204,7 @@ describe('LabPage', () => {
       await ctx.click('eval-run');
       await vi.waitFor(() => expect(ctx.q('eval-table')).not.toBeNull());
       await vi.waitFor(() =>
-        expect(ctx.q('eval-progress')?.textContent).toContain('20 of 20 runs'),
+        expect(ctx.q('eval-progress')?.textContent).toContain('15 of 15 runs'),
       );
       await ctx.fixture.whenStable();
       return ctx;
@@ -225,7 +225,6 @@ describe('LabPage', () => {
       await click('eval-runs-10');
       await click('eval-act-act1');
       await click('eval-act-act2');
-      await click('eval-act-act3');
       await click('eval-run');
       await vi.waitFor(() => expect(q('eval-progress')?.textContent).toContain('10 of 10 runs'));
       expect(runner.run).toHaveBeenCalledTimes(10);
@@ -233,7 +232,7 @@ describe('LabPage', () => {
 
     it('shows a row per act with pass count, rate and times', async () => {
       const { q, root } = await runEvals(passing);
-      expect(root.querySelectorAll('[data-testid^="eval-row-"]')).toHaveLength(4);
+      expect(root.querySelectorAll('[data-testid^="eval-row-"]')).toHaveLength(3);
       expect(q('eval-row-act2')?.querySelector('[data-testid="eval-pass"]')?.textContent).toContain(
         '5/5',
       );
@@ -254,7 +253,7 @@ describe('LabPage', () => {
       expect(q('eval-failures-act1')).toBeNull();
       const failures = q('eval-failures-act2');
       expect(failures?.textContent).toContain('5 failed runs');
-      expect(failures?.textContent).toContain('Missing setDealFilter');
+      expect(failures?.textContent).toContain('Missing openProposalDrawer');
       root
         .querySelector<HTMLButtonElement>(
           '[data-testid="eval-failures-act2"] [data-testid="eval-inspect"]',
@@ -270,14 +269,16 @@ describe('LabPage', () => {
       const { fixture, q, click } = await runEvals(passing);
       const change = q<HTMLInputElement>('eval-change');
       if (change) {
-        change.value = 'Reworded setDealFilter';
+        change.value = 'Reworded openProposalDrawer';
         change.dispatchEvent(new Event('input', { bubbles: true }));
       }
       await fixture.whenStable();
       await click('eval-log-rows');
       const output = q('eval-log-output')?.textContent ?? '';
-      expect(output.split('\n')).toHaveLength(4);
-      expect(output).toContain('| 2026-11-09 | act2 | Reworded setDealFilter | – → 5/5 | 1.5 s |');
+      expect(output.split('\n')).toHaveLength(3);
+      expect(output).toContain(
+        '| 2026-11-09 | act2 | Reworded openProposalDrawer | – → 5/5 | 1.5 s |',
+      );
       await click('eval-copy');
       await vi.waitFor(() => expect(q('eval-copy')?.textContent).toContain('Copied'));
       expect(writeText).toHaveBeenCalledWith(output);
@@ -300,8 +301,8 @@ describe('LabPage', () => {
       const { click: press } = await runEvals(passing);
       await press('eval-export');
       const json = JSON.parse(await (createObjectURL.mock.calls[0]?.[0] as Blob).text());
-      expect(json.runs).toHaveLength(20);
-      expect(json.summaries).toHaveLength(4);
+      expect(json.runs).toHaveLength(15);
+      expect(json.summaries).toHaveLength(3);
       expect(click).toHaveBeenCalledOnce();
     });
 
@@ -351,7 +352,7 @@ describe('LabPage', () => {
       const { fixture, root, click, q } = setup(failing);
       await fixture.whenStable();
       await click('eval-run');
-      await vi.waitFor(() => expect(q('eval-progress')?.textContent).toContain('20 of 20 runs'));
+      await vi.waitFor(() => expect(q('eval-progress')?.textContent).toContain('15 of 15 runs'));
       await click('eval-log-rows');
       await fixture.whenStable();
       await expectNoA11yViolations(root);
