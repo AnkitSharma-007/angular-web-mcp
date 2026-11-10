@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/AnkitSharma-007/angular-web-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/AnkitSharma-007/angular-web-mcp/actions/workflows/ci.yml)
 
-A Sales & Deals CRM whose Signal state and Signal Forms are exposed to AI agents through Angular's native **WebMCP** APIs. It is a reference app for building "agent-ready" Angular apps, and the live demo for Google DevFest Mumbai.
+A Sales & Deals CRM whose Signal state and Signal Forms are exposed to AI agents through Angular's native **WebMCP** APIs. It is a reference app for building "agent-ready" Angular apps.
+
+**Try it live:** <https://angular-web-mcp.vercel.app> (needs Chrome 158+ with WebMCP enabled, and your own Gemini API key).
 
 - **Agents see what the app chooses to show them.** Tools are registered on `document.modelContext`, scoped to routes, stores and forms, so they appear and disappear with the UI that owns them.
 - **Humans stay in charge.** Risky tools pause on an approval dialog with a before/after diff. A rejection is a result the model adapts to. Undo is human-only.
@@ -26,10 +28,10 @@ Open <http://localhost:4200>, then:
 
 1. Click the **key** icon in the toolbar, paste a Gemini API key from [AI Studio](https://aistudio.google.com/apikey) and pick a model.
 2. Open **Agent console** on the dashboard.
-3. Click a demo chip (**Context**, **Signal Form**, **Governance**), or ask your own question.
+3. Click an example prompt (**Context**, **Signal Form**, **Governance**), or ask your own question.
 4. Press `` ` `` to open the wire inspector and watch the traffic.
 
-Step by step, with what you should see at each point, the presenter keys and the stage run of show: [How to run the demo](docs/how-to-run.md).
+A guided walkthrough, with what you should see at each step, is in [How to run](docs/how-to-run.md).
 
 You can use the tools without a key. Any WebMCP client in your browser (Chrome's agent, a tool-inspector extension) sees the same tools. Only the in-app console needs a key.
 
@@ -85,9 +87,9 @@ Layering is `core ◄ mcp ◄ features ► shared`, enforced by ESLint. `mcp/` h
 | `GeminiAgent`                    | Streaming agent loop with thoughts, tool calls and cost. Loaded lazily with `injectAsync`                      |
 | `HUMAN_APPROVAL_GATE`            | A token owned by `mcp/`, implemented by a Material dialog in `features/`                                       |
 | Wire inspector                   | Packets, registered tools and tool-call stats, with JSON-RPC framing as a display convention                   |
-| Lab (`/dashboard/lab`)           | Scored act evals, to tune the text the model reads                                                             |
+| Lab (`/dashboard/lab`)           | Scored evals of the example prompts, to tune the text the model reads                                          |
 
-The demo has three acts: **Context** (read tools), **Signal Form** (a tool that appears when a drawer opens, and an agent that can fix its own mistake) and **Governance** (approve one change, reject another, undo).
+Three built-in example prompts show the main ideas: **Context** (read tools), **Signal Form** (a tool that appears when a drawer opens, and an agent that can fix its own mistake) and **Governance** (approve one change, reject another, undo).
 
 Read the [architecture blueprint](docs/architecture-blueprint.md) for the decisions and the session-by-session build log.
 
@@ -155,8 +157,8 @@ npm run build
 ```
 
 - No test touches the network: `fetch` throws, and the Gemini client is always replaced by a fake that streams scripted turns.
-- The act acceptance suite (`src/app/demo-acts.spec.ts`) plays all three acts on one app through the real console, tools, forms and approval dialog.
-- Interactive components are checked with axe. jsdom skips colour contrast, so run Lighthouse before a talk.
+- The end-to-end suite (`src/app/demo-acts.spec.ts`) plays the three example prompts on one app through the real console, tools, forms and approval dialog.
+- Interactive components are checked with axe. jsdom skips colour contrast, so run Lighthouse separately.
 
 CI runs the tests on every push to `main`.
 
