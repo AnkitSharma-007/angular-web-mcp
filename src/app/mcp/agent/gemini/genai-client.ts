@@ -43,6 +43,7 @@ export interface GenAiConfig {
   tools?: { functionDeclarations: GenAiFunctionDeclaration[] }[];
   thinkingConfig?: { thinkingLevel?: string; includeThoughts?: boolean };
   automaticFunctionCalling?: { disable?: boolean };
+  toolConfig?: { functionCallingConfig?: { mode?: string } };
   abortSignal?: AbortSignal;
 }
 

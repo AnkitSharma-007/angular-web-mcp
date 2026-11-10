@@ -20,6 +20,11 @@ export const MAX_AGENT_STEPS = 8;
 export const NEXT_TOOL_WAIT_MS = 3000;
 export const STREAM_STALL_MS = 45_000;
 
+const NO_TOOL_CALLS = { functionCallingConfig: { mode: 'NONE' } };
+const WRAP_UP_NOTICE =
+  'The tool-call budget for this request is used up. Do not call more tools. ' +
+  'Say plainly what was completed, citing the results above, and what was not.';
+
 export interface AgentRunOptions {
   signal: AbortSignal;
   model?: string;
@@ -158,12 +163,14 @@ export class GeminiAgent {
     let message: GenAiPart[] = [{ text: prompt }];
     let packetId = 0;
     let finished = false;
+    let wrappedUp = false;
 
     try {
       const client = await this.createClient(apiKey);
       const chat = client.chats.create({ model: modelId, config: configFor(declarations) });
 
-      for (let step = 1; step <= maxSteps; step++) {
+      for (let step = 1; step <= maxSteps + 1; step++) {
+        const wrapUp = step > maxSteps;
         if (signal.aborted) {
           yield finish(true);
           return;
@@ -182,19 +189,31 @@ export class GeminiAgent {
           }
         }
 
+        const outgoing = wrapUp ? [...message, { text: WRAP_UP_NOTICE }] : message;
         const stepStartedAt = this.clock().getTime();
         packetId = this.telemetry.begin({
           channel: 'llm',
           method: 'generateContent',
           model: modelId,
           ...(options.runId !== undefined && { runId: options.runId }),
-          params: { model: modelId, step, thinkingLevel, tools: tools.length, message },
+          params: {
+            model: modelId,
+            step,
+            thinkingLevel,
+            tools: tools.length,
+            message: outgoing,
+            ...(wrapUp && { wrapUp: true }),
+          },
         });
 
         arm();
         const stream = await chat.sendMessageStream({
-          message,
-          config: { ...configFor(declarations), abortSignal: stepSignal },
+          message: outgoing,
+          config: {
+            ...configFor(declarations),
+            ...(wrapUp && { toolConfig: NO_TOOL_CALLS }),
+            abortSignal: stepSignal,
+          },
         });
 
         const calls: GenAiFunctionCall[] = [];
@@ -242,6 +261,10 @@ export class GeminiAgent {
         });
         packetId = 0;
 
+        if (wrapUp) {
+          wrappedUp = text.trim() !== '';
+          break;
+        }
         if (calls.length === 0) {
           finished = true;
           break;
@@ -279,7 +302,9 @@ export class GeminiAgent {
         yield {
           type: 'error',
           kind: 'max-steps',
-          message: `Stopped after ${maxSteps} steps without a final answer`,
+          message: wrappedUp
+            ? `Reached the ${maxSteps}-step limit. The summary above says what completed; anything it lists as not done still needs a new request.`
+            : `Stopped after ${maxSteps} steps without a final answer`,
         };
       }
       yield finish(false);

@@ -465,6 +465,7 @@ type AgentEvent =
 1. Map the tools to `functionDeclarations` with `parametersJsonSchema`.
 2. Create the chat with `chats.create({ model, config: { systemInstruction, tools, thinkingConfig: { thinkingLevel, includeThoughts: true }, automaticFunctionCalling: { disable: true } } })`.
 3. Run a `sendMessageStream` loop for at most **8 steps**. Send each `functionResponse` back on the **same chat**, so thought signatures are preserved. Refresh the tools after a `toolchange`.
+   If the 8th step still asks for tools, make one more request on the same chat with `toolConfig.functionCallingConfig.mode = 'NONE'` and a notice to summarise what completed. Its text is shown, and the run still ends with a `max-steps` error, so an eval keeps scoring it as a miss.
 4. Record `usageMetadata` (including `thoughtsTokenCount`) and `costUsd` in a `generateContent` packet.
 5. Bound each model request: a stall timer (`STREAM_STALL_MS`, 45 s, `stallMs` option) covers the request and the gap between chunks, and is cleared during tool calls and human approvals so a person is never raced by a network timeout. A stall ends the run with a `network` error. The key check has its own 10 s deadline, and the Lab gives each isolated run a total budget (`RUN_BUDGET_MS`, 120 s).
 6. Map errors:

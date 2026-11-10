@@ -233,15 +233,20 @@ describe('GeminiAgent', () => {
   });
 
   describe('limits and abort', () => {
-    it('stops after 8 steps with a max-steps error', async () => {
+    it('stops calling tools after 8 steps and reports a max-steps error', async () => {
       register('loop');
       const { agent, fake } = setup(
         Array.from({ length: 12 }, () => ({ functionCalls: [{ name: 'loop' }] })),
       );
       const events = await run(agent);
       expect(MAX_AGENT_STEPS).toBe(8);
-      expect(fake.requests).toHaveLength(8);
-      expect(events.at(-2)).toMatchObject({ type: 'error', kind: 'max-steps' });
+      expect(fake.requests).toHaveLength(9);
+      expect(events.filter((event) => event.type === 'tool-call')).toHaveLength(8);
+      expect(events.at(-2)).toMatchObject({
+        type: 'error',
+        kind: 'max-steps',
+        message: 'Stopped after 8 steps without a final answer',
+      });
       expect(events.at(-1)?.type).toBe('done');
     });
 
@@ -251,7 +256,85 @@ describe('GeminiAgent', () => {
         Array.from({ length: 5 }, () => ({ functionCalls: [{ name: 'loop' }] })),
       );
       await run(agent, 'go', { maxSteps: 2 });
-      expect(fake.requests).toHaveLength(2);
+      expect(fake.requests).toHaveLength(3);
+    });
+
+    describe('wrap-up after the step limit', () => {
+      const loops = (count: number): FakeScript[] =>
+        Array.from({ length: count }, () => ({ functionCalls: [{ name: 'loop' }] }));
+
+      it('asks once more with tool calling switched off and relays the summary', async () => {
+        const executed = vi.fn(() => text({ saved: 'P-0001' }));
+        register('loop', executed);
+        const { agent, fake } = setup([
+          ...loops(2),
+          { text: ['Saved draft P-0001. ', 'Nothing else was done.'] },
+        ]);
+        const events = await run(agent, 'go', { maxSteps: 2 });
+
+        expect(fake.requests).toHaveLength(3);
+        expect(fake.requests[0]?.config?.toolConfig).toBeUndefined();
+        const last = fake.requests[2];
+        expect(last?.config?.toolConfig).toEqual({ functionCallingConfig: { mode: 'NONE' } });
+        expect(last?.config?.tools?.[0]?.functionDeclarations.length).toBeGreaterThan(0);
+        expect(JSON.stringify(last?.message)).toContain('Do not call more tools');
+        expect(JSON.stringify(last?.message)).toContain('functionResponse');
+        expect(executed).toHaveBeenCalledTimes(2);
+
+        const summary = events
+          .flatMap((event) => (event.type === 'text-delta' ? [event.text] : []))
+          .join('');
+        expect(summary).toBe('Saved draft P-0001. Nothing else was done.');
+        expect(events.at(-2)).toMatchObject({ type: 'error', kind: 'max-steps' });
+        expect((events.at(-2) as { message: string }).message).toContain('summary above');
+        expect(events.at(-1)).toMatchObject({ type: 'done' });
+      });
+
+      it('never executes a tool call the model still returns during the wrap-up', async () => {
+        const executed = vi.fn(() => text({ ok: true }));
+        register('loop', executed);
+        const { agent } = setup([...loops(3)]);
+        const events = await run(agent, 'go', { maxSteps: 2 });
+        expect(executed).toHaveBeenCalledTimes(2);
+        expect(events.filter((event) => event.type === 'tool-call')).toHaveLength(2);
+        expect(events.at(-2)).toMatchObject({ kind: 'max-steps' });
+      });
+
+      it('counts the wrap-up request in usage and records it as its own packet', async () => {
+        register('loop');
+        const { agent, telemetry } = setup([
+          ...loops(1).map((turn) => ({ ...turn, usage: { promptTokenCount: 100 } })),
+          { text: 'Done so far.', usage: { promptTokenCount: 50, candidatesTokenCount: 5 } },
+        ]);
+        const events = await run(agent, 'go', { maxSteps: 1 });
+        expect(events.at(-1)).toMatchObject({ type: 'done', usage: { input: 150, output: 5 } });
+        const packets = telemetry
+          .entities()
+          .filter((packet) => packet.method === 'generateContent');
+        expect(packets).toHaveLength(2);
+        expect(JSON.stringify(packets[1]?.envelope)).toContain('"wrapUp":true');
+        expect(JSON.stringify(packets[0]?.envelope)).not.toContain('wrapUp');
+      });
+
+      it('does not wrap up when the model answered within the limit', async () => {
+        register('loop');
+        const { agent, fake } = setup([...loops(1), { text: 'All done.' }]);
+        const events = await run(agent, 'go', { maxSteps: 2 });
+        expect(fake.requests).toHaveLength(2);
+        expect(events.some((event) => event.type === 'error')).toBe(false);
+      });
+
+      it('skips the wrap-up when the run is stopped', async () => {
+        const controller = new AbortController();
+        register('loop', () => {
+          controller.abort();
+          return text({ ok: true });
+        });
+        const { agent, fake } = setup([...loops(3)]);
+        const events = await collect(agent.run('go', { signal: controller.signal, maxSteps: 1 }));
+        expect(fake.requests).toHaveLength(1);
+        expect(events.at(-1)).toMatchObject({ type: 'done', partial: true });
+      });
     });
 
     it('only settles when aborted before it starts', async () => {
