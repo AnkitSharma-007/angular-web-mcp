@@ -48,6 +48,15 @@ describe('ApiKeyDialog', () => {
     expect(input.getAttribute('autocomplete')).toBe('off');
   });
 
+  it('lays the content out in its own flex wrapper without negative margins', async () => {
+    await open();
+    const content = document.querySelector('mat-dialog-content');
+    const layout = content?.querySelector('[data-testid="dialog-layout"]');
+    expect(layout?.className).toContain('flex-col');
+    expect(content?.className).not.toContain('flex');
+    expect(content?.innerHTML).not.toMatch(/-mt-/);
+  });
+
   it('links to Google AI Studio', async () => {
     await open();
     const link = document.querySelector<HTMLAnchorElement>(
