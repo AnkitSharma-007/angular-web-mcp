@@ -44,20 +44,6 @@ export interface Deal {
   lastActivityDays: number;
 }
 
-export interface DealFilter {
-  stages: DealStage[];
-  regions: Region[];
-  minValue: number | null;
-  query: string;
-}
-
-export const EMPTY_FILTER: Readonly<DealFilter> = {
-  stages: [],
-  regions: [],
-  minValue: null,
-  query: '',
-};
-
 export function isClosedStage(stage: DealStage): boolean {
   return stage === 'closed-won' || stage === 'closed-lost';
 }

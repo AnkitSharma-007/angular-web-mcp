@@ -1,5 +1,5 @@
 import { createSeedDeals } from '../app/core/data/seed-deals';
-import { EMPTY_FILTER, type Deal } from '../app/core/models/deal';
+import type { Deal } from '../app/core/models/deal';
 import type { ActId } from '../app/features/agent-console/demo-prompts';
 import type { ProposalDraft } from '../app/core/models/proposal';
 import type {
@@ -12,7 +12,7 @@ import type {
 export function seedDealsView(mutate: (deals: Deal[]) => void = () => undefined): DealsView {
   const deals = createSeedDeals();
   mutate(deals);
-  return { deals, filter: { ...EMPTY_FILTER }, historyCount: 0 };
+  return { deals, historyCount: 0 };
 }
 
 export function makeOutcome(overrides: Partial<RunOutcome> = {}): RunOutcome {

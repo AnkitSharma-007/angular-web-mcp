@@ -4,7 +4,6 @@ import {
   isOpen,
   isStalled,
   type Deal,
-  type DealFilter,
   type DealStage,
   type Region,
 } from '../../../core/models/deal';
@@ -51,16 +50,6 @@ export function matchesQuery(deal: Deal, query: string): boolean {
     [deal.id, deal.account, deal.title, deal.owner].some((field) =>
       field.toLowerCase().includes(needle),
     )
-  );
-}
-
-export function applyFilter(deals: readonly Deal[], filter: DealFilter): Deal[] {
-  return deals.filter(
-    (deal) =>
-      (filter.stages.length === 0 || filter.stages.includes(deal.stage)) &&
-      (filter.regions.length === 0 || filter.regions.includes(deal.region)) &&
-      (filter.minValue === null || netValue(deal) >= filter.minValue) &&
-      matchesQuery(deal, filter.query),
   );
 }
 

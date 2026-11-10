@@ -10,15 +10,13 @@ import {
   untracked,
 } from '@angular/core';
 import { form, FormField } from '@angular/forms/signals';
-import { MatButton } from '@angular/material/button';
-import { MatChip, MatChipRemove, MatChipSet } from '@angular/material/chips';
 import { MatFormField, MatLabel, MatPrefix } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatSort, MatSortHeader, type Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
-import { DEAL_STAGE_LABELS, isStalled, type Deal } from '../../../core/models/deal';
-import { formatCompactCurrency, netValue } from '../../../core/util/money';
+import { isStalled, type Deal } from '../../../core/models/deal';
+import { netValue } from '../../../core/util/money';
 import { CompactCurrencyPipe } from '../../../shared/pipes/compact-currency';
 import { StageBadge } from '../../../shared/ui/stage-badge/stage-badge';
 import { DashboardUiStore } from '../data/dashboard-ui-store';
@@ -27,12 +25,6 @@ import { sortDeals } from './sort-deals';
 
 export const FLASH_DURATION_MS = 2000;
 export const SEARCH_DEBOUNCE_MS = 250;
-
-interface FilterChip {
-  key: string;
-  label: string;
-  remove: () => void;
-}
 
 function dealChanged(previous: Deal, next: Deal): boolean {
   return (Object.keys(next) as (keyof Deal)[]).some((field) => previous[field] !== next[field]);
@@ -44,10 +36,6 @@ function dealChanged(previous: Deal, next: Deal): boolean {
     MatTableModule,
     MatSort,
     MatSortHeader,
-    MatChipSet,
-    MatChip,
-    MatChipRemove,
-    MatButton,
     MatFormField,
     MatLabel,
     MatPrefix,
@@ -83,36 +71,9 @@ export class DealsTable {
   protected readonly sort = signal<Sort>({ active: '', direction: '' });
   protected readonly rows = computed(() => sortDeals(this.store.filteredDeals(), this.sort()));
 
-  protected readonly searchModel = linkedSignal(() => ({ query: this.store.filter().query }));
+  protected readonly searchModel = linkedSignal(() => ({ query: this.store.query() }));
   protected readonly searchForm = form(this.searchModel);
   private readonly debouncedQuery = debounced(() => this.searchModel().query, SEARCH_DEBOUNCE_MS);
-
-  protected readonly chips = computed<FilterChip[]>(() => {
-    const { stages, regions, minValue } = this.store.filter();
-    const toggle = (stage: string) => () =>
-      this.store.setFilter({ stages: stages.filter((s) => s !== stage) });
-    return [
-      ...stages.map((stage) => ({
-        key: `stage:${stage}`,
-        label: DEAL_STAGE_LABELS[stage],
-        remove: toggle(stage),
-      })),
-      ...regions.map((region) => ({
-        key: `region:${region}`,
-        label: region,
-        remove: () => this.store.setFilter({ regions: regions.filter((r) => r !== region) }),
-      })),
-      ...(minValue === null
-        ? []
-        : [
-            {
-              key: 'minValue',
-              label: `Net ≥ ${formatCompactCurrency(minValue)}`,
-              remove: () => this.store.setFilter({ minValue: null }),
-            },
-          ]),
-    ];
-  });
 
   protected readonly flashing = signal<ReadonlySet<string>>(new Set());
   private known = new Map<string, Deal>();
@@ -124,8 +85,8 @@ export class DealsTable {
     }
     const query = this.debouncedQuery.value();
     untracked(() => {
-      if (query !== this.store.filter().query) {
-        this.store.setFilter({ query });
+      if (query !== this.store.query()) {
+        this.store.setQuery(query);
       }
     });
   });
@@ -144,10 +105,6 @@ export class DealsTable {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.timers.forEach((timer) => clearTimeout(timer)));
-  }
-
-  protected clearFilters(): void {
-    this.store.clearFilter();
   }
 
   private flash(ids: readonly string[]): void {

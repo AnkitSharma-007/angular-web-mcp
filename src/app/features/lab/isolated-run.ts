@@ -1,5 +1,5 @@
 import { DestroyRef, Service, computed, inject, injectAsync, signal } from '@angular/core';
-import type { Deal, DealFilter } from '../../core/models/deal';
+import type { Deal } from '../../core/models/deal';
 import type { ProposalDraft } from '../../core/models/proposal';
 import { CLOCK } from '../../core/util/clock';
 import type { AgentErrorKind, AgentEvent } from '../../mcp/agent/agent-events';
@@ -32,7 +32,6 @@ export interface DecisionRecord {
 
 export interface DealsView {
   deals: readonly Deal[];
-  filter: DealFilter;
   historyCount: number;
 }
 
@@ -251,7 +250,6 @@ export class IsolatedRunner {
   private viewDeals(): DealsView {
     return {
       deals: this.deals.entities().map((deal) => ({ ...deal })),
-      filter: structuredClone(this.deals.filter()),
       historyCount: this.deals.history().length,
     };
   }

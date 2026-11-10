@@ -6,25 +6,6 @@
       <input matInput type="search" [formField]="searchForm.query" />
     </mat-form-field>
 
-    <mat-chip-set aria-label="Active filters">
-      @for (chip of chips(); track chip.key) {
-        <mat-chip (removed)="chip.remove()">
-          {{ chip.label }}
-          <button
-            matChipRemove
-            type="button"
-            [attr.aria-label]="'Remove ' + chip.label + ' filter'"
-          >
-            <mat-icon>cancel</mat-icon>
-          </button>
-        </mat-chip>
-      }
-    </mat-chip-set>
-
-    @if (chips().length > 0 || searchModel().query) {
-      <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
-    }
-
     <span class="ml-auto text-sm text-on-surface-variant" aria-live="polite">
       Showing {{ rows().length }} of {{ store.entities().length }} deals
     </span>
@@ -115,7 +96,7 @@
 
       <tr *matNoDataRow>
         <td class="p-6 text-center text-on-surface-variant" [attr.colspan]="columns.length">
-          No deals match the current filters.
+          No deals match your search.
         </td>
       </tr>
     </table>

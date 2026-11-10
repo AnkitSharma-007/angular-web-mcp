@@ -11,7 +11,7 @@
 >
 > **Revision 2026-11-10:** the Lab's Model Race, the 🧠 Strategist model, the free/paid-tier badges and the inspector's per-model table (`byModel`) were removed to keep the app focused on WebMCP. The Lab keeps the scored act evals.
 >
-> **Revision 2026-11-10 (2):** the demo is now 9 minutes in a 30-minute session. Act 2 (Multi-step) was removed together with its `setDealFilter` and `updateDealStages` tools, the stage-move logic and the prompt-gated eval steps. The acts are now 1 Context, 2 Signal Form and 3 Governance; the dashboard route exposes 6 tools (7 while the proposal drawer is open). The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
+> **Revision 2026-11-10 (2):** the demo is now 9 minutes in a 30-minute session. Act 2 (Multi-step) was removed together with its `setDealFilter` and `updateDealStages` tools, the stage-move logic and the prompt-gated eval steps. The table's removable filter chips and the stage/region/value filter model went with them: the table now has a text search only (`DealsStore.query`, `setQuery`). The acts are now 1 Context, 2 Signal Form and 3 Governance; the dashboard route exposes 6 tools (7 while the proposal drawer is open). The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
 
 ---
 
@@ -263,12 +263,6 @@ interface Deal {
   contactEmail: string;
   lastActivityDays: number;
 }
-interface DealFilter {
-  stages: DealStage[];
-  regions: Region[];
-  minValue: number | null;
-  query: string;
-}
 ```
 
 ### 3.2 `DealsStore`
@@ -277,20 +271,18 @@ interface DealFilter {
 export function withDeals() {
   return signalStoreFeature(
     withEntities<Deal>(),
-    withState<{ filter: DealFilter }>({ filter: EMPTY_FILTER }),
-    withComputed(({ entities, filter }) => ({
-      filteredDeals: computed(() => applyFilter(entities(), filter())),
+    withState<{ query: string }>({ query: '' }),
+    withComputed(({ entities, query }) => ({
+      filteredDeals: computed(() => entities().filter((deal) => matchesQuery(deal, query()))),
       pipelineByStage: computed(() => byStage(entities())),
       byRegion: computed(() => byRegion(entities())),
       kpis: computed(() => kpis(entities())),
       atRiskDeals: computed(() => entities().filter(isAtRisk)),
     })),
     withMethods((store) => ({
-      setFilter,
-      clearFilter,
+      setQuery,
       search,
       applyDiscount,
-      moveStages,
       terminateContract,
       reset,
     })),

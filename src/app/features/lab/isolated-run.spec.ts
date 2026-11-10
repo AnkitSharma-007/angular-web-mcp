@@ -80,7 +80,7 @@ describe('IsolatedRunner', () => {
     ) {
       deals.recordSnapshot('earlier change');
       deals.applyDiscount(['D-1002'], 12);
-      deals.setFilter({ regions: ['EMEA'] });
+      deals.setQuery('arcadia');
       proposals.saveDraft(createProposalModel({ dealId: 'D-1001' }));
       ui.openProposal('D-1001');
     }
@@ -109,7 +109,7 @@ describe('IsolatedRunner', () => {
       behaviour = async function* () {
         seen = {
           discount: deals.entityMap()['D-1002']?.discountPct,
-          filter: deals.filter().regions,
+          query: deals.query(),
           history: deals.history().length,
           drafts: proposals.entities().length,
           drawer: ui.proposalOpen(),
@@ -119,7 +119,7 @@ describe('IsolatedRunner', () => {
       await runner.run({ ...RUN, fromSeed: true });
       expect(seen).toEqual({
         discount: createSeedDeals().find((deal) => deal.id === 'D-1002')?.discountPct,
-        filter: [],
+        query: '',
         history: 0,
         drafts: 0,
         drawer: false,
@@ -238,7 +238,7 @@ describe('IsolatedRunner', () => {
         deals.recordSnapshot('10% off');
         deals.applyDiscount(['D-1002', 'D-1003'], 10);
         deals.terminateContract('D-1001');
-        deals.setFilter({ regions: ['EMEA'] });
+        deals.setQuery('arcadia');
         proposals.saveDraft(createProposalModel({ dealId: 'D-1001' }));
         ui.openProposal('D-1001');
         yield DONE;
@@ -284,7 +284,6 @@ describe('IsolatedRunner', () => {
       const { runner, deals, proposals } = setup();
       behaviour = async function* () {
         deals.applyDiscount(['D-1002'], 12);
-        deals.setFilter({ regions: ['EMEA'] });
         deals.recordSnapshot('agent change');
         proposals.saveDraft(createProposalModel({ dealId: 'D-1001' }));
         yield DONE;
@@ -293,7 +292,6 @@ describe('IsolatedRunner', () => {
       const outcome = await runner.run(RUN);
 
       expect(outcome.deals.deals.find((deal) => deal.id === 'D-1002')?.discountPct).toBe(12);
-      expect(outcome.deals.filter.regions).toEqual(['EMEA']);
       expect(outcome.deals.historyCount).toBe(1);
       expect(outcome.proposals.drafts.map((draft) => draft.dealId)).toEqual(['D-1001']);
       expect(deals.entityMap()['D-1002']?.discountPct).toBe(0);

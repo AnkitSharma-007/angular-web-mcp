@@ -9,16 +9,14 @@ import {
 import { setAllEntities, updateEntity, withEntities } from '@ngrx/signals/entities';
 import { createSeedDeals } from '../../../core/data/seed-deals';
 import {
-  EMPTY_FILTER,
   MAX_DISCOUNT_PCT,
   isAtRisk,
   type ContractStatus,
   type Deal,
-  type DealFilter,
 } from '../../../core/models/deal';
 import type { MutationResult } from '../../../core/models/mutation-result';
 import {
-  applyFilter,
+  matchesQuery,
   byRegion,
   byStage,
   computeKpis,
@@ -26,8 +24,8 @@ import {
   type DealSearch,
 } from './deal-analytics';
 
-interface FilterState {
-  filter: DealFilter;
+interface QueryState {
+  query: string;
 }
 
 export function clampDiscount(discountPct: number): number {
@@ -37,20 +35,17 @@ export function clampDiscount(discountPct: number): number {
 export function withDeals() {
   return signalStoreFeature(
     withEntities<Deal>(),
-    withState<FilterState>({ filter: { ...EMPTY_FILTER } }),
-    withComputed(({ entities, filter }) => ({
-      filteredDeals: computed(() => applyFilter(entities(), filter())),
+    withState<QueryState>({ query: '' }),
+    withComputed(({ entities, query }) => ({
+      filteredDeals: computed(() => entities().filter((deal) => matchesQuery(deal, query()))),
       pipelineByStage: computed(() => byStage(entities())),
       byRegion: computed(() => byRegion(entities())),
       kpis: computed(() => computeKpis(entities())),
       atRiskDeals: computed(() => entities().filter(isAtRisk)),
     })),
     withMethods((store) => ({
-      setFilter(partial: Partial<DealFilter>): void {
-        patchState(store, (state) => ({ filter: { ...state.filter, ...partial } }));
-      },
-      clearFilter(): void {
-        patchState(store, { filter: { ...EMPTY_FILTER } });
+      setQuery(query: string): void {
+        patchState(store, { query });
       },
       search(criteria: DealSearch = {}) {
         return searchDeals(store.entities(), criteria);
@@ -95,7 +90,7 @@ export function withDeals() {
         return result;
       },
       reset(): void {
-        patchState(store, setAllEntities(createSeedDeals()), { filter: { ...EMPTY_FILTER } });
+        patchState(store, setAllEntities(createSeedDeals()), { query: '' });
       },
     })),
   );

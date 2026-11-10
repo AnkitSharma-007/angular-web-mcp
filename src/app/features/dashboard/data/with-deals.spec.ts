@@ -110,67 +110,35 @@ describe('withDeals', () => {
     });
   });
 
-  describe('filter', () => {
-    it('narrows by region', () => {
+  describe('query', () => {
+    it('matches case-insensitively across account, title, owner and id', () => {
       const store = createStore();
-      store.setFilter({ regions: ['EMEA'] });
-      expect(store.filteredDeals().every((d) => d.region === 'EMEA')).toBe(true);
-    });
-
-    it('narrows by stage', () => {
-      const store = createStore();
-      store.setFilter({ stages: ['closed-won', 'closed-lost'] });
-      expect(store.filteredDeals()).toHaveLength(5);
-    });
-
-    it('combines regions and stages', () => {
-      const store = createStore();
-      store.setFilter({ regions: ['EMEA'], stages: ['negotiation'] });
-      expect(store.filteredDeals()).toHaveLength(4);
-    });
-
-    it('narrows by minimum net value', () => {
-      const store = createStore();
-      store.setFilter({ minValue: 500000 });
-      expect(store.filteredDeals().map((d) => d.id)).toEqual(['D-1009', 'D-1015']);
-    });
-
-    it('matches the query case-insensitively across account, title, owner and id', () => {
-      const store = createStore();
-      store.setFilter({ query: 'ARCADIA' });
+      store.setQuery('ARCADIA');
       expect(store.filteredDeals().map((d) => d.id)).toEqual(['D-1002']);
-      store.setFilter({ query: 'fleet' });
+      store.setQuery('fleet');
       expect(store.filteredDeals()).toHaveLength(2);
-      store.setFilter({ query: 'kenji' });
+      store.setQuery('kenji');
       expect(store.filteredDeals().every((d) => d.owner === 'Kenji Sato')).toBe(true);
-      store.setFilter({ query: 'd-1010' });
+      store.setQuery('d-1010');
       expect(store.filteredDeals()).toHaveLength(1);
     });
 
-    it('ignores surrounding whitespace in the query', () => {
+    it('ignores surrounding whitespace', () => {
       const store = createStore();
-      store.setFilter({ query: '  arcadia  ' });
+      store.setQuery('  arcadia  ');
       expect(store.filteredDeals()).toHaveLength(1);
     });
 
-    it('merges partial updates into the current filter', () => {
+    it('shows every deal again when cleared', () => {
       const store = createStore();
-      store.setFilter({ regions: ['NA'] });
-      store.setFilter({ query: 'bank' });
-      expect(store.filter()).toMatchObject({ regions: ['NA'], query: 'bank' });
-    });
-
-    it('clears back to all deals', () => {
-      const store = createStore();
-      store.setFilter({ regions: ['APAC'], stages: ['proposal'], minValue: 1, query: 'x' });
-      store.clearFilter();
+      store.setQuery('arcadia');
+      store.setQuery('');
       expect(store.filteredDeals()).toHaveLength(24);
-      expect(store.filter()).toEqual({ stages: [], regions: [], minValue: null, query: '' });
     });
 
     it('does not touch the entities', () => {
       const store = createStore();
-      store.setFilter({ regions: ['LATAM'] });
+      store.setQuery('arcadia');
       expect(store.entities()).toHaveLength(24);
     });
   });
@@ -187,9 +155,9 @@ describe('withDeals', () => {
       ]);
     });
 
-    it('ignores the view filter', () => {
+    it('ignores the table search', () => {
       const store = createStore();
-      store.setFilter({ regions: ['LATAM'] });
+      store.setQuery('arcadia');
       expect(store.search().total).toBe(24);
     });
 
@@ -257,15 +225,15 @@ describe('withDeals', () => {
       expect(store.entityMap()['D-1002']?.contractStatus).toBe('none');
     });
 
-    it('resets entities and filter to the seed', () => {
+    it('resets entities and query to the seed', () => {
       const store = createStore();
       store.applyDiscount(['D-1002'], 20);
       store.terminateContract('D-1001');
-      store.setFilter({ query: 'x' });
+      store.setQuery('x');
       store.reset();
       expect(store.entityMap()['D-1002']?.discountPct).toBe(0);
       expect(store.entityMap()['D-1001']?.contractStatus).toBe('active');
-      expect(store.filter().query).toBe('');
+      expect(store.query()).toBe('');
       expect(store.entities()).toHaveLength(24);
     });
   });

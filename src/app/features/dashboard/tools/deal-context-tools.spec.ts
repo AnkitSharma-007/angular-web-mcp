@@ -141,8 +141,8 @@ describe('deal context tools', () => {
       });
     });
 
-    it('ignores the table view filter', async () => {
-      store.setFilter({ regions: ['EMEA'] });
+    it('ignores the table search', async () => {
+      store.setQuery('D-1004');
       expect((await call<SearchResult>('searchDeals')).total).toBe(24);
     });
 

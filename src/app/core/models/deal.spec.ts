@@ -1,12 +1,4 @@
-import {
-  DEAL_STAGES,
-  EMPTY_FILTER,
-  isAtRisk,
-  isClosedStage,
-  isOpen,
-  isStalled,
-  type DealStage,
-} from './deal';
+import { DEAL_STAGES, isAtRisk, isClosedStage, isOpen, isStalled, type DealStage } from './deal';
 
 describe('deal predicates', () => {
   it('lists stages in funnel order', () => {
@@ -44,9 +36,5 @@ describe('deal predicates', () => {
     expect(isAtRisk({ stage: 'proposal', lastActivityDays: 30, probability: 80 })).toBe(true);
     expect(isAtRisk({ stage: 'proposal', lastActivityDays: 1, probability: 24 })).toBe(true);
     expect(isAtRisk({ stage: 'proposal', lastActivityDays: 1, probability: 25 })).toBe(false);
-  });
-
-  it('starts with an empty filter', () => {
-    expect(EMPTY_FILTER).toEqual({ stages: [], regions: [], minValue: null, query: '' });
   });
 });

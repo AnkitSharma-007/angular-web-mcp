@@ -25,7 +25,7 @@ describe('DashboardUiStore', () => {
   it('keeps the selection while the deal stays visible', () => {
     const { deals, ui } = setup();
     ui.selectDeal('D-1004');
-    deals.setFilter({ regions: ['EMEA'] });
+    deals.setQuery('D-1004');
     expect(ui.selectedDealId()).toBe('D-1004');
     deals.applyDiscount(['D-1004'], 10);
     expect(ui.selectedDealId()).toBe('D-1004');
@@ -34,7 +34,7 @@ describe('DashboardUiStore', () => {
   it('resets the selection when the deal is filtered out', () => {
     const { deals, ui } = setup();
     ui.selectDeal('D-1002');
-    deals.setFilter({ regions: ['EMEA'] });
+    deals.setQuery('D-1004');
     expect(ui.selectedDealId()).toBeNull();
   });
 

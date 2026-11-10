@@ -1,7 +1,6 @@
 import type { HarnessLoader } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
-import { MatChipSetHarness } from '@angular/material/chips/testing';
 import { MatSortHarness } from '@angular/material/sort/testing';
 import { MatTableHarness } from '@angular/material/table/testing';
 import { DashboardUiStore } from '../data/dashboard-ui-store';
@@ -39,37 +38,11 @@ describe('DealsTable', () => {
     expect(root.textContent).toContain('Showing 24 of 24 deals');
   });
 
-  it('shows only filtered deals and a chip per active filter', async () => {
-    const { fixture, loader, store, table } = await setup();
-    store.setFilter({ regions: ['EMEA'], stages: ['negotiation'] });
-    await fixture.whenStable();
-    const rows = await (await table()).getRows();
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.length).toBeLessThan(24);
-    const chips = await (await loader.getHarness(MatChipSetHarness)).getChips();
-    expect(await Promise.all(chips.map((chip) => chip.getText()))).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('Negotiation'),
-        expect.stringContaining('EMEA'),
-      ]),
-    );
-  });
-
-  it('shows exactly the EMEA deals under an EMEA filter', async () => {
+  it('shows only the deals that match the query', async () => {
     const { fixture, store, table } = await setup();
-    store.setFilter({ regions: ['EMEA'] });
+    store.setQuery('arcadia');
     await fixture.whenStable();
-    const emea = store.entities().filter((deal) => deal.region === 'EMEA').length;
-    expect(await (await table()).getRows()).toHaveLength(emea);
-  });
-
-  it('removes a filter when its chip is removed', async () => {
-    const { fixture, loader, store } = await setup();
-    store.setFilter({ regions: ['EMEA'] });
-    await fixture.whenStable();
-    const [chip] = await (await loader.getHarness(MatChipSetHarness)).getChips();
-    await (await chip?.getRemoveButton())?.click();
-    expect(store.filter().regions).toEqual([]);
+    expect(await (await table()).getRows()).toHaveLength(1);
   });
 
   it('sorts by net value when the header is clicked', async () => {
@@ -98,16 +71,16 @@ describe('DealsTable', () => {
     input!.value = 'arcadia';
     input!.dispatchEvent(new Event('input'));
     await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
-    expect(store.filter().query).toBe('');
+    expect(store.query()).toBe('');
     await vi.advanceTimersByTimeAsync(2);
     await fixture.whenStable();
-    expect(store.filter().query).toBe('arcadia');
+    expect(store.query()).toBe('arcadia');
     expect(await (await table()).getRows()).toHaveLength(1);
   });
 
   it('mirrors a query set elsewhere into the search box', async () => {
     const { fixture, root, store } = await setup();
-    store.setFilter({ query: 'konkan' });
+    store.setQuery('konkan');
     await fixture.whenStable();
     expect(root.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('konkan');
   });
@@ -138,8 +111,8 @@ describe('DealsTable', () => {
 
   it('shows an empty state when nothing matches', async () => {
     const { fixture, root, store } = await setup();
-    store.setFilter({ minValue: 1e9 });
+    store.setQuery('no-such-account');
     await fixture.whenStable();
-    expect(root.textContent).toContain('No deals match the current filters.');
+    expect(root.textContent).toContain('No deals match your search.');
   });
 });

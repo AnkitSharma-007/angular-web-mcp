@@ -103,7 +103,7 @@ describe('dashboard route tree', () => {
     expect(ui?.selectedDealId()).toBeNull();
     const deals = harness.routeDebugElement?.injector.get(DealsStore);
     ui?.selectDeal('D-1002');
-    deals?.setFilter({ regions: ['EMEA'] });
+    deals?.setQuery('D-1004');
     expect(ui?.selectedDealId()).toBeNull();
   });
 
@@ -148,12 +148,12 @@ describe('dashboard route tree', () => {
     const proposals = injector?.get(ProposalsStore);
     deals?.recordSnapshot('before');
     deals?.applyDiscount(['D-1002'], 25);
-    deals?.setFilter({ regions: ['EMEA'] });
+    deals?.setQuery('D-1004');
     proposals?.saveDraft(createProposalModel({ dealId: 'D-1001' }));
     ui?.openProposal('D-1001');
     TestBed.inject(PresenterActions).reset();
     expect(deals?.entityMap()['D-1002']?.discountPct).toBe(0);
-    expect(deals?.filter().regions).toEqual([]);
+    expect(deals?.query()).toBe('');
     expect(deals?.history()).toEqual([]);
     expect(proposals?.entities()).toEqual([]);
     expect(ui?.proposalOpen()).toBe(false);

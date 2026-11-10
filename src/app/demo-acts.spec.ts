@@ -10,7 +10,6 @@ import { useFakeModelContext } from '../testing/test-providers';
 import { App } from './app';
 import { appConfig } from './app.config';
 import { createSeedDeals } from './core/data/seed-deals';
-import { EMPTY_FILTER } from './core/models/deal';
 import type { ActId } from './features/agent-console/demo-prompts';
 import { DashboardShell } from './features/dashboard/dashboard-shell';
 import { DealsStore } from './features/dashboard/data/deals-store';
@@ -265,7 +264,7 @@ describe('demo acts', () => {
     await demo.settle();
 
     expect(demo.deals.entities()).toEqual(createSeedDeals());
-    expect(demo.deals.filter()).toEqual(EMPTY_FILTER);
+    expect(demo.deals.query()).toBe('');
     expect(demo.deals.history()).toEqual([]);
     expect(demo.proposals.entities()).toEqual([]);
     expect(demo.session.transcript()).toEqual([]);
