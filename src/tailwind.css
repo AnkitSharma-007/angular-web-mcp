@@ -1,8 +1,6 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme inline {
   --font-sans: 'Inter Variable', system-ui, sans-serif;
   --color-primary: var(--mat-sys-primary);

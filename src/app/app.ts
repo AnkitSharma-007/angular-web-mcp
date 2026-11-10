@@ -3,7 +3,6 @@ import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatToolbar } from '@angular/material/toolbar';
 import { isActive, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { ThemeService } from './core/services/theme';
 import { PresenterActions } from './features/agent-console/presenter-actions';
 import { CONSOLE_DOCK_WIDTH, LayoutStore } from './features/layout/layout-store';
 import { ApiKeyDialogLauncher } from './features/settings/api-key-dialog-launcher';
@@ -22,7 +21,6 @@ import { REGISTRY_KIND } from './mcp/registry/registry-kind';
 })
 export class App {
   protected readonly title = 'Angular Web MCP';
-  protected readonly theme = inject(ThemeService);
   protected readonly registryKind = inject(REGISTRY_KIND);
   protected readonly settings = inject(SettingsStore);
   protected readonly layout = inject(LayoutStore);

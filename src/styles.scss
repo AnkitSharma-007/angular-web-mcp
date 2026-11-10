@@ -6,7 +6,7 @@ html {
       color: (
         primary: mat.$azure-palette,
         tertiary: mat.$violet-palette,
-        theme-type: color-scheme,
+        theme-type: light,
       ),
       typography: (
         plain-family: (
@@ -25,11 +25,7 @@ html {
   );
 
   color-scheme: light;
-  --app-success: light-dark(#1b7f3b, #6fdc97);
-
-  &.dark {
-    color-scheme: dark;
-  }
+  --app-success: #1b7f3b;
 }
 
 body {

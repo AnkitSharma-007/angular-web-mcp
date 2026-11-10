@@ -40,7 +40,6 @@ describe('dashboard route tree', () => {
 
   afterEach(() => {
     localStorage.clear();
-    document.documentElement.classList.remove('dark');
   });
 
   it('shares one DealsStore between the dashboard and the lab', async () => {

@@ -51,14 +51,6 @@
     >
       <mat-icon>{{ settings.hasKey() ? 'key' : 'key_off' }}</mat-icon>
     </button>
-    <button
-      mat-icon-button
-      type="button"
-      [attr.aria-label]="theme.isDark() ? 'Switch to light theme' : 'Switch to dark theme'"
-      (click)="theme.toggle()"
-    >
-      <mat-icon>{{ theme.isDark() ? 'light_mode' : 'dark_mode' }}</mat-icon>
-    </button>
   </mat-toolbar>
 </header>
 <main class="p-4" [style.padding-bottom]="layout.inspectorOpen() ? '48vh' : null">

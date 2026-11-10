@@ -49,7 +49,6 @@ describe('demo acts', () => {
     TestBed.inject(MatSnackBar).dismiss();
     localStorage.clear();
     sessionStorage.clear();
-    document.documentElement.classList.remove('dark');
   });
 
   async function startApp() {

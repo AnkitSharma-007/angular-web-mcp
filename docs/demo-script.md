@@ -105,7 +105,7 @@ Show the registration styles side by side: `provideExperimentalWebMcpTools` on a
 - [ ] **Freeze** prompts, tool descriptions, the system prompt and model IDs about 5 days before.
 - [ ] **Sign-off:** Lab → **Evals**, 10 runs per act on ⚡ (Act 1) and 🛠️ (Acts 2–4). Each act needs **at least 9/10** and a p90 inside its time slot. Cost is under about $1 for the sweep.
 - [ ] Copy the rows from **Build log rows** into [eval-log.md](eval-log.md).
-- [ ] **Lighthouse** accessibility on both themes. The unit tests skip colour contrast, so this is where it gets checked.
+- [ ] **Lighthouse** accessibility. The unit tests skip colour contrast, so this is where it gets checked.
 - [ ] **Production build once:** `npm run build`, serve `dist/angular-web-mcp/browser` with a single-page-app fallback (for example `npx serve -s dist/angular-web-mcp/browser`) and check the console for CSP violations.
 - [ ] **Live API once:** the unit tests use a fake Gemini. Run all four chips against a real key and confirm the model IDs and `thinkingLevel` are accepted.
 
@@ -117,7 +117,7 @@ Show the registration styles side by side: `provideExperimentalWebMcpTools` on a
 - [ ] The toolbar chip reads **WebMCP: native** (not `polyfill` or `shim`).
 - [ ] **API key** entered before the talk, never on the projector. The key dialog shows **valid**, and the key is restricted ([README](../README.md#bring-your-own-key)).
 - [ ] The key works for **⚡** and **🛠️**: run chips `1` and `2` once. Argon needs billing and isn't used on stage.
-- [ ] Notifications off, other tabs closed, browser zoom set, theme chosen.
+- [ ] Notifications off, other tabs closed, browser zoom set.
 
 ### Five minutes before
 

@@ -205,7 +205,6 @@ src/
     ├── app.ts/.html · app.config.ts · app.routes.ts
     ├── core/                   # LEAF
     │   ├── models/ (deal, proposal) · data/seed-deals.ts · util/ (money, clock)
-    │   ├── services/theme.ts
     │   └── store-features/with-agent-history.ts
     ├── mcp/                    # reusable WebMCP platform → core only
     │   ├── registry/ (model-context, ensure-model-context)
@@ -723,6 +722,7 @@ interface ActEval {
   - `shared/ui/glass-card`: `title`, and an `accent` input of `'primary' | 'warn' | 'success'`.
   - A toolbar theme toggle.
 - **Acceptance:** the dark glass toolbar renders.
+- **Later change:** dark mode and `ThemeService` were removed. The app is light-only (`theme-type: light`), so the `dark` variant, the toolbar toggle and the stored `awm.theme` preference no longer exist.
 
 **1.3** `test(theme): cover ThemeService persistence, GlassCard projection and a11y baseline`
 

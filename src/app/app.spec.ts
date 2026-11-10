@@ -18,7 +18,6 @@ describe('App', () => {
 
   afterEach(() => {
     localStorage.clear();
-    document.documentElement.classList.remove('dark');
   });
 
   async function render() {
@@ -49,22 +48,10 @@ describe('App', () => {
     expect(appConfig.providers.length).toBeGreaterThan(0);
   });
 
-  it('renders a glass toolbar with the theme toggle', async () => {
+  it('renders a glass toolbar without a theme toggle', async () => {
     const { root } = await render();
     expect(root.querySelector('mat-toolbar')?.classList.contains('glass')).toBe(true);
-    expect(root.querySelector('button[aria-label^="Switch to"]')?.getAttribute('aria-label')).toBe(
-      'Switch to dark theme',
-    );
-  });
-
-  it('toggles the theme from the toolbar', async () => {
-    const { fixture, root } = await render();
-    const button = root.querySelector<HTMLButtonElement>('button[aria-label^="Switch to"]');
-    button?.click();
-    await fixture.whenStable();
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(button?.getAttribute('aria-label')).toBe('Switch to light theme');
-    expect(localStorage.getItem('awm.theme')).toBe('dark');
+    expect(root.querySelector('button[aria-label^="Switch to"]')).toBeNull();
   });
 
   it('shows the registry kind chip', async () => {

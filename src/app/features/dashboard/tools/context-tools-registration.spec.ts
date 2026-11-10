@@ -26,7 +26,6 @@ describe('dashboard tools route-scoped registration', () => {
 
   afterEach(() => {
     localStorage.clear();
-    document.documentElement.classList.remove('dark');
   });
 
   it('exposes the eight dashboard tools on /dashboard and none on /about', async () => {
