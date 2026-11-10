@@ -7,6 +7,12 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('Today is 2026-11-09.');
   });
 
+  it('asks for plain text without Markdown or HTML, because the reply is shown raw', () => {
+    expect(prompt).toContain('plain text');
+    expect(prompt).toMatch(/no Markdown or HTML/);
+    expect(prompt).toContain('asterisks');
+  });
+
   it('covers reasons, human rejections and tools that change', () => {
     expect(prompt).toContain('"reason"');
     expect(prompt).toContain('rejects');

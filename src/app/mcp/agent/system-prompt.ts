@@ -11,6 +11,7 @@ export function buildSystemPrompt(now: Date): string {
     '- The set of tools can change while you work, for example a form tool appears after you open its drawer. Use a new tool when it shows up.',
     '- When a tool reports a problem, read the message, fix the arguments and try again.',
     '- Do several independent calls in one step when you can.',
-    '- Reply in short plain text. Name the deals you touched and the numbers that changed. Do not use HTML.',
+    '- Reply in short plain text. Name the deals you touched and the numbers that changed.',
+    '- The screen shows your reply as raw text, so write no Markdown or HTML: no asterisks, backticks, # headings or tables. Use short lines, and a leading hyphen for lists.',
   ].join('\n');
 }
