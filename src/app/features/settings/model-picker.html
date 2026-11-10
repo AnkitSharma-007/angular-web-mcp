@@ -18,21 +18,6 @@
         <span aria-hidden="true">{{ card.emoji }}</span>
         <span>{{ card.persona }}</span>
         <span class="text-xs font-normal text-on-surface-variant">{{ card.id }}</span>
-        @if (card.freeTier) {
-          <span
-            class="ml-auto rounded-full border border-outline-variant px-2 py-0.5 text-xs"
-            data-testid="free-badge"
-          >
-            Free tier
-          </span>
-        } @else {
-          <span
-            class="ml-auto rounded-full border border-error px-2 py-0.5 text-xs text-error"
-            data-testid="paid-badge"
-          >
-            Paid tier
-          </span>
-        }
       </span>
       <span class="text-xs text-on-surface-variant">
         {{ card.role }} · thinking {{ card.thinkingLevel }} · ${{ card.price.inputPerM }} in / ${{

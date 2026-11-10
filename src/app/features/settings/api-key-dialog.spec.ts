@@ -113,14 +113,6 @@ describe('ApiKeyDialog', () => {
     expect(store.model()).toBe('gemini-3.5-flash-lite');
   });
 
-  it('shows the paid-tier badge on Argon', async () => {
-    await open();
-    expect(
-      document.querySelector('[data-testid="model-gemini-4-argon"] [data-testid="paid-badge"]')
-        ?.textContent,
-    ).toContain('Paid tier');
-  });
-
   it('does not change anything on cancel', async () => {
     const { loader, closed, store } = await open();
     await (await loader.getHarness(MatInputHarness)).setValue(KEY);

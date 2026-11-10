@@ -1,8 +1,8 @@
 import type { TokenUsage } from '../../telemetry/wire-packet';
 
-export type GeminiModelId = 'gemini-3.5-flash-lite' | 'gemini-3.8-flash' | 'gemini-4-argon';
-export type ThinkingLevelName = 'low' | 'medium' | 'high';
-export type ModelPersona = 'Sprinter' | 'Operator' | 'Strategist';
+export type GeminiModelId = 'gemini-3.5-flash-lite' | 'gemini-3.8-flash';
+export type ThinkingLevelName = 'low' | 'medium';
+export type ModelPersona = 'Sprinter' | 'Operator';
 
 export interface PriceEntry {
   from: string;
@@ -15,7 +15,6 @@ export interface GeminiModel {
   persona: ModelPersona;
   emoji: string;
   thinkingLevel: ThinkingLevelName;
-  freeTier: boolean;
   role: string;
   priceSchedule: readonly PriceEntry[];
 }
@@ -28,7 +27,6 @@ export const GEMINI_MODELS: readonly GeminiModel[] = [
     persona: 'Sprinter',
     emoji: '⚡',
     thinkingLevel: 'low',
-    freeTier: true,
     role: 'Fast reads and quick answers',
     priceSchedule: [{ from: '2000-01-01', inputPerM: 0.3, outputPerM: 2.5 }],
   },
@@ -37,23 +35,10 @@ export const GEMINI_MODELS: readonly GeminiModel[] = [
     persona: 'Operator',
     emoji: '🛠️',
     thinkingLevel: 'medium',
-    freeTier: true,
     role: 'Multi-step tool work',
     priceSchedule: [
       { from: '2000-01-01', inputPerM: 0.75, outputPerM: 3.75 },
       { from: '2027-01-01', inputPerM: 1.5, outputPerM: 7.5 },
-    ],
-  },
-  {
-    id: 'gemini-4-argon',
-    persona: 'Strategist',
-    emoji: '🧠',
-    thinkingLevel: 'high',
-    freeTier: false,
-    role: 'Deep reasoning, paid tier only',
-    priceSchedule: [
-      { from: '2000-01-01', inputPerM: 2, outputPerM: 10 },
-      { from: '2026-12-01', inputPerM: 4, outputPerM: 20 },
     ],
   },
 ];

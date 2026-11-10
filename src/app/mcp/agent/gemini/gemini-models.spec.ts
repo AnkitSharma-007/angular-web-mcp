@@ -9,40 +9,18 @@ import {
 const USAGE = { input: 1_000_000, output: 1_000_000, thinking: 0 };
 
 describe('Gemini model catalog', () => {
-  it('lists three models with the Operator as the default', () => {
-    expect(GEMINI_MODELS.map((model) => model.persona)).toEqual([
-      'Sprinter',
-      'Operator',
-      'Strategist',
-    ]);
+  it('lists two models with the Operator as the default', () => {
+    expect(GEMINI_MODELS.map((model) => model.persona)).toEqual(['Sprinter', 'Operator']);
     expect(findModel(DEFAULT_MODEL_ID)?.persona).toBe('Operator');
   });
 
-  it('marks only the Strategist as paid tier', () => {
-    expect(GEMINI_MODELS.filter((model) => !model.freeTier).map((model) => model.id)).toEqual([
-      'gemini-4-argon',
-    ]);
-  });
-
   it('maps each persona to its thinking level', () => {
-    expect(GEMINI_MODELS.map((model) => model.thinkingLevel)).toEqual(['low', 'medium', 'high']);
+    expect(GEMINI_MODELS.map((model) => model.thinkingLevel)).toEqual(['low', 'medium']);
   });
 
   it('returns undefined for an unknown model', () => {
     expect(findModel('gemini-1.0')).toBeUndefined();
     expect(estimateCostUsd('gemini-1.0', USAGE, new Date())).toBeUndefined();
-  });
-
-  it('switches Argon to the higher price on 2026-12-01', () => {
-    const argon = findModel('gemini-4-argon')!;
-    expect(priceAt(argon, new Date('2026-11-30T23:59:59Z'))).toMatchObject({
-      inputPerM: 2,
-      outputPerM: 10,
-    });
-    expect(priceAt(argon, new Date('2026-12-01T00:00:00Z'))).toMatchObject({
-      inputPerM: 4,
-      outputPerM: 20,
-    });
   });
 
   it('switches the Operator to the higher price on 2027-01-01', () => {
@@ -52,12 +30,12 @@ describe('Gemini model catalog', () => {
   });
 
   it('prices a run at the rate for the given date', () => {
-    expect(estimateCostUsd('gemini-4-argon', USAGE, new Date('2026-11-09T00:00:00Z'))).toBeCloseTo(
-      12,
-    );
-    expect(estimateCostUsd('gemini-4-argon', USAGE, new Date('2026-12-02T00:00:00Z'))).toBeCloseTo(
-      24,
-    );
+    expect(
+      estimateCostUsd('gemini-3.8-flash', USAGE, new Date('2026-11-09T00:00:00Z')),
+    ).toBeCloseTo(4.5);
+    expect(
+      estimateCostUsd('gemini-3.8-flash', USAGE, new Date('2027-01-02T00:00:00Z')),
+    ).toBeCloseTo(9);
   });
 
   it('bills thinking tokens at the output rate', () => {

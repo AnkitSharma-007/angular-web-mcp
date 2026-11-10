@@ -170,8 +170,8 @@ describe('AgentSessionStore', () => {
 
   it('passes the model and run id to the agent', async () => {
     const { store, calls } = setup(events(DONE));
-    await store.run('go', { model: 'gemini-4-argon', runId: 'r1' });
-    expect(calls[0]?.options).toMatchObject({ model: 'gemini-4-argon', runId: 'r1' });
+    await store.run('go', { model: 'gemini-3.5-flash-lite', runId: 'r1' });
+    expect(calls[0]?.options).toMatchObject({ model: 'gemini-3.5-flash-lite', runId: 'r1' });
     await store.run('again');
     expect(calls[1]?.options).not.toHaveProperty('model');
   });

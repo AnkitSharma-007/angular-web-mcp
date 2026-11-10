@@ -9,6 +9,7 @@ import {
 } from '@ngrx/signals';
 import { CLOCK } from '../../core/util/clock';
 import { estimateCostUsd } from '../../mcp/agent/gemini/gemini-models';
+import type { TokenUsage } from '../../mcp/telemetry/wire-packet';
 import type { ActId } from '../agent-console/demo-prompts';
 import { SettingsStore } from '../settings/settings-store';
 import {
@@ -22,7 +23,8 @@ import {
   type EvalRun,
 } from './act-evals';
 import { IsolatedRunner } from './isolated-run';
-import { RACE_ESTIMATE_USAGE } from './model-race';
+
+const ESTIMATE_USAGE: TokenUsage = { input: 9000, output: 800, thinking: 1500 };
 
 export type RunsPerAct = 5 | 10;
 
@@ -76,8 +78,7 @@ export const EvalSessionStore = signalStore(
     estimatedCostUsd: computed(() => {
       const at = _clock();
       return ACT_EVALS.filter((spec) => selectedActs().includes(spec.id)).reduce(
-        (sum, spec) =>
-          sum + runsPerAct() * (estimateCostUsd(spec.model, RACE_ESTIMATE_USAGE, at) ?? 0),
+        (sum, spec) => sum + runsPerAct() * (estimateCostUsd(spec.model, ESTIMATE_USAGE, at) ?? 0),
         0,
       );
     }),

@@ -21,7 +21,7 @@
       {{
         settings.keyStatus() === 'invalid'
           ? 'Google rejected the saved API key, so runs are disabled.'
-          : 'Add your Gemini API key to run races and evals.'
+          : 'Add your Gemini API key to run evals.'
       }}
     </span>
     <button mat-stroked-button type="button" data-testid="add-key" (click)="openKeyDialog()">
@@ -30,5 +30,4 @@
   </p>
 }
 
-<app-race-panel />
 <app-eval-panel />

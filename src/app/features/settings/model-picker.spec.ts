@@ -18,10 +18,10 @@ async function render(now = '2026-11-09T00:00:00Z') {
 }
 
 describe('ModelPicker', () => {
-  it('shows the three models with the current one selected', async () => {
+  it('shows the two models with the current one selected', async () => {
     const { listbox } = await render();
     const options = await listbox.getOptions();
-    expect(options).toHaveLength(3);
+    expect(options).toHaveLength(2);
     const selected = await listbox.getOptions({ selected: true });
     expect(await selected[0]?.getText()).toContain('Operator');
   });
@@ -37,33 +37,24 @@ describe('ModelPicker', () => {
     const { fixture, root } = await render();
     const list = root.querySelector<HTMLElement>('[ngListbox]')!;
     list.focus();
-    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    await fixture.whenStable();
-    expect(fixture.componentInstance.value()).toBe('gemini-4-argon');
     list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.value()).toBe('gemini-3.5-flash-lite');
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     await fixture.whenStable();
     expect(fixture.componentInstance.value()).toBe('gemini-3.8-flash');
   });
 
-  it('flags Argon as paid tier and the others as free', async () => {
-    const { root } = await render();
-    expect(root.querySelectorAll('[data-testid="paid-badge"]')).toHaveLength(1);
-    expect(
-      root.querySelector('[data-testid="model-gemini-4-argon"] [data-testid="paid-badge"]'),
-    ).not.toBeNull();
-    expect(root.querySelectorAll('[data-testid="free-badge"]')).toHaveLength(2);
-  });
-
   it('shows the price in force on the current date', async () => {
-    const before = await render('2026-11-09T00:00:00Z');
+    const before = await render('2026-12-31T12:00:00Z');
     expect(
-      before.root.querySelector('[data-testid="model-gemini-4-argon"]')?.textContent,
-    ).toContain('$2 in / $10 out');
+      before.root.querySelector('[data-testid="model-gemini-3.8-flash"]')?.textContent,
+    ).toContain('$0.75 in / $3.75 out');
     TestBed.resetTestingModule();
-    const after = await render('2026-12-02T00:00:00Z');
-    expect(after.root.querySelector('[data-testid="model-gemini-4-argon"]')?.textContent).toContain(
-      '$4 in / $20 out',
-    );
+    const after = await render('2027-01-02T00:00:00Z');
+    expect(
+      after.root.querySelector('[data-testid="model-gemini-3.8-flash"]')?.textContent,
+    ).toContain('$1.5 in / $7.5 out');
   });
 
   it('is free of axe violations', async () => {

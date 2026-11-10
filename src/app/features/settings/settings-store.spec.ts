@@ -104,12 +104,12 @@ describe('SettingsStore', () => {
 
   it('stores and restores the chosen model, ignoring an unknown stored one', () => {
     const first = setup();
-    first.store.setModel('gemini-4-argon');
-    expect(localStorage.getItem(MODEL_STORAGE_KEY)).toBe('gemini-4-argon');
+    first.store.setModel('gemini-3.5-flash-lite');
+    expect(localStorage.getItem(MODEL_STORAGE_KEY)).toBe('gemini-3.5-flash-lite');
     TestBed.resetTestingModule();
-    expect(setup().store.model()).toBe('gemini-4-argon');
+    expect(setup().store.model()).toBe('gemini-3.5-flash-lite');
     TestBed.resetTestingModule();
-    localStorage.setItem(MODEL_STORAGE_KEY, 'gemini-0');
+    localStorage.setItem(MODEL_STORAGE_KEY, 'gemini-4-argon');
     expect(setup().store.model()).toBe(DEFAULT_MODEL_ID);
   });
 

@@ -201,50 +201,6 @@ describe('WireTelemetryStore', () => {
     });
   });
 
-  describe('byModel', () => {
-    it('aggregates settled llm packets per model', () => {
-      const store = setup();
-      const llm = (model: string, input: number, costUsd: number, latencyMs: number) =>
-        store.record(
-          { channel: 'llm', method: 'generateContent', model },
-          { status: 'ok', latencyMs, tokens: { input, output: 10, thinking: 5 }, costUsd },
-        );
-      llm('gemini-b', 100, 0.01, 200);
-      llm('gemini-a', 50, 0.02, 100);
-      llm('gemini-b', 300, 0.03, 400);
-      store.begin({ channel: 'llm', method: 'generateContent', model: 'gemini-a' });
-      store.record({ channel: 'llm', method: 'generateContent' }, { status: 'ok' });
-      call(store, 5);
-
-      expect(store.byModel()).toEqual([
-        {
-          model: 'gemini-a',
-          calls: 1,
-          tokens: { input: 50, output: 10, thinking: 5 },
-          costUsd: 0.02,
-          avgLatencyMs: 100,
-        },
-        {
-          model: 'gemini-b',
-          calls: 2,
-          tokens: { input: 400, output: 20, thinking: 10 },
-          costUsd: 0.04,
-          avgLatencyMs: 300,
-        },
-      ]);
-    });
-
-    it('tolerates llm packets without usage or cost', () => {
-      const store = setup();
-      store.record({ channel: 'llm', method: 'generateContent', model: 'm' }, { status: 'error' });
-      expect(store.byModel()[0]).toMatchObject({
-        calls: 1,
-        tokens: { input: 0, output: 0, thinking: 0 },
-        costUsd: 0,
-      });
-    });
-  });
-
   describe('pause and clear', () => {
     it('drops new packets while paused, still settles open ones, and resumes', () => {
       const store = setup();

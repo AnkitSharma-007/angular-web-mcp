@@ -59,14 +59,6 @@ export interface WireStats {
   totalBytes: number;
 }
 
-export interface ModelStats {
-  model: string;
-  calls: number;
-  tokens: TokenUsage;
-  costUsd: number;
-  avgLatencyMs: number;
-}
-
 interface TelemetryState {
   paused: boolean;
 }
@@ -105,38 +97,12 @@ export function computeWireStats(packets: readonly WirePacket[]): WireStats {
   };
 }
 
-export function computeModelStats(packets: readonly WirePacket[]): ModelStats[] {
-  const groups = new Map<string, WirePacket[]>();
-  for (const packet of packets) {
-    if (packet.channel === 'llm' && packet.model && packet.status !== 'pending') {
-      groups.set(packet.model, [...(groups.get(packet.model) ?? []), packet]);
-    }
-  }
-  return [...groups]
-    .map(([model, group]) => ({
-      model,
-      calls: group.length,
-      tokens: group.reduce<TokenUsage>(
-        (sum, { tokens }) => ({
-          input: sum.input + (tokens?.input ?? 0),
-          output: sum.output + (tokens?.output ?? 0),
-          thinking: sum.thinking + (tokens?.thinking ?? 0),
-        }),
-        { input: 0, output: 0, thinking: 0 },
-      ),
-      costUsd: group.reduce((sum, packet) => sum + (packet.costUsd ?? 0), 0),
-      avgLatencyMs: group.reduce((sum, packet) => sum + (packet.latencyMs ?? 0), 0) / group.length,
-    }))
-    .sort((a, b) => a.model.localeCompare(b.model));
-}
-
 export const WireTelemetryStore = signalStore(
   { providedIn: 'root' },
   withEntities<WirePacket>(),
   withState<TelemetryState>({ paused: false }),
   withComputed(({ entities }) => ({
     stats: computed<WireStats>(() => computeWireStats(entities())),
-    byModel: computed<ModelStats[]>(() => computeModelStats(entities())),
   })),
   withMethods((store) => {
     const clock = inject(CLOCK);

@@ -386,9 +386,9 @@ describe('AgentConsole', () => {
     it('switches to the default model from a model-access error card', async () => {
       const script = events({ type: 'error', kind: 'model-access', message: 'no access' });
       const { fixture, q, settings } = setup({ script });
-      settings.setModel('gemini-4-argon');
+      settings.setModel('gemini-3.5-flash-lite');
       await fixture.whenStable();
-      expect(q('model-badge')?.getAttribute('data-model')).toBe('gemini-4-argon');
+      expect(q('model-badge')?.getAttribute('data-model')).toBe('gemini-3.5-flash-lite');
       q<HTMLButtonElement>('chip-act2')?.click();
       await settle(fixture);
       q<HTMLButtonElement>('error-fix')?.click();

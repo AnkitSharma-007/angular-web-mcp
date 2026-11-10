@@ -208,45 +208,6 @@
           />
           <app-stat-tile label="Wire size" [value]="(stats().totalBytes | number) + ' B'" />
         </div>
-        @if (byModel().length === 0) {
-          <p class="m-0 text-sm text-on-surface-variant" data-testid="models-empty">
-            No model calls yet.
-          </p>
-        } @else {
-          <table class="w-full border-collapse text-left text-xs" data-testid="by-model">
-            <caption class="pb-1 text-left text-sm font-medium text-on-surface">
-              By model
-            </caption>
-            <thead class="text-on-surface-variant">
-              <tr>
-                <th scope="col" class="py-1 pr-3 font-medium">Model</th>
-                <th scope="col" class="py-1 pr-3 text-right font-medium">Calls</th>
-                <th scope="col" class="py-1 pr-3 text-right font-medium">In</th>
-                <th scope="col" class="py-1 pr-3 text-right font-medium">Out</th>
-                <th scope="col" class="py-1 pr-3 text-right font-medium">Thinking</th>
-                <th scope="col" class="py-1 pr-3 text-right font-medium">Avg latency</th>
-                <th scope="col" class="py-1 text-right font-medium">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (entry of byModel(); track entry.model) {
-                <tr [attr.data-testid]="'model-row-' + entry.model">
-                  <th scope="row" class="py-1 pr-3 font-mono font-normal">{{ entry.model }}</th>
-                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.calls }}</td>
-                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.input }}</td>
-                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.output }}</td>
-                  <td class="py-1 pr-3 text-right tabular-nums">{{ entry.tokens.thinking }}</td>
-                  <td class="py-1 pr-3 text-right tabular-nums">
-                    {{ entry.avgLatencyMs | number: '1.0-0' }} ms
-                  </td>
-                  <td class="py-1 text-right tabular-nums" data-testid="model-cost">
-                    {{ entry.costUsd | number: '1.4-4' }}
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        }
       </div>
     </mat-tab>
   </mat-tab-group>

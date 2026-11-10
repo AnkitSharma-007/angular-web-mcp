@@ -7,14 +7,12 @@ import { SettingsStore } from '../settings/settings-store';
 import { EvalPanel } from './eval-panel';
 import { EvalSessionStore } from './eval-session';
 import { IsolatedRunner } from './isolated-run';
-import { ModelRaceStore } from './model-race';
-import { RacePanel } from './race-panel';
 
 @Component({
   selector: 'app-lab-page',
-  imports: [EvalPanel, MatButton, MatIcon, RacePanel],
+  imports: [EvalPanel, MatButton, MatIcon],
   templateUrl: './lab-page.html',
-  providers: [ModelRaceStore, EvalSessionStore],
+  providers: [EvalSessionStore],
   host: { class: 'flex flex-col gap-4' },
 })
 export class LabPage {
@@ -23,16 +21,12 @@ export class LabPage {
   private readonly launcher = inject(ApiKeyDialogLauncher);
 
   constructor() {
-    const race = inject(ModelRaceStore);
     const evals = inject(EvalSessionStore);
-    const stopAll = () => {
-      race.stop();
-      evals.stop();
-    };
-    const unregister = inject(PresenterActions).registerReset(stopAll);
+    const stop = () => evals.stop();
+    const unregister = inject(PresenterActions).registerReset(stop);
     inject(DestroyRef).onDestroy(() => {
       unregister();
-      stopAll();
+      stop();
     });
   }
 

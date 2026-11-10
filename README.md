@@ -45,15 +45,14 @@ The app has no server. The in-app agent calls the Gemini API straight from your 
   - restrict it by **HTTP referrer** to the origins you run the app from, for example `http://localhost:4200/*`
   - use a separate key for this app, and set a quota or budget alert
 - **Data:** free-tier requests may be used by Google to improve its products. That is fine here because the CRM data is fictional. Do not point this app at real customer data on a free-tier key.
-- **Billing:** a Gemini app subscription does not pay for API calls. You need an AI Studio key, and the 🧠 model needs billing enabled.
+- **Billing:** a Gemini app subscription does not pay for API calls. You need an AI Studio key.
 
 ## Choosing a model
 
-| Persona               | Model ID                | Thinking | Free tier | $ per 1M tokens (in / out)                  | Use it for                     |
-| --------------------- | ----------------------- | -------- | --------- | ------------------------------------------- | ------------------------------ |
-| ⚡ Sprinter           | `gemini-3.5-flash-lite` | low      | yes       | 0.30 / 2.50                                 | Fast reads and quick answers   |
-| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium   | yes       | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01)   | Multi-step tool work           |
-| 🧠 Strategist         | `gemini-4-argon`        | high     | no        | 2.00 / 10.00 (4.00 / 20.00 from 2026-12-01) | Deep reasoning, paid tier only |
+| Persona               | Model ID                | Thinking | $ per 1M tokens (in / out)                | Use it for                   |
+| --------------------- | ----------------------- | -------- | ----------------------------------------- | ---------------------------- |
+| ⚡ Sprinter           | `gemini-3.5-flash-lite` | low      | 0.30 / 2.50                               | Fast reads and quick answers |
+| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium   | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Multi-step tool work         |
 
 Prices verified 2026-11-09 against the [model list](https://aistudio.google.com/docs/models) and [pricing](https://aistudio.google.com/docs/pricing). The catalog keeps dated price schedules, so the picker always shows the price in force today. Every run shows its token usage and cost; thinking tokens are billed at the output rate.
 
@@ -88,8 +87,8 @@ Layering is `core ◄ mcp ◄ features ► shared`, enforced by ESLint. `mcp/` h
 | `McpToolGateway`                 | The only registry client inside the app. Lists, calls and watches tools, and traces every call                 |
 | `GeminiAgent`                    | Streaming agent loop with thoughts, tool calls and cost. Loaded lazily with `injectAsync`                      |
 | `HUMAN_APPROVAL_GATE`            | A token owned by `mcp/`, implemented by a Material dialog in `features/`                                       |
-| Wire inspector                   | Packets, tool schemas and per-model stats, with JSON-RPC framing as a display convention                       |
-| Lab (`/dashboard/lab`)           | Side-by-side model race and scored act evals, to tune the text the model reads                                 |
+| Wire inspector                   | Packets, registered tools and tool-call stats, with JSON-RPC framing as a display convention                   |
+| Lab (`/dashboard/lab`)           | Scored act evals, to tune the text the model reads                                                             |
 
 The demo has four acts: **Context** (read tools), **Multi-step** (filter, discount, close), **Signal Form** (a tool that appears when a drawer opens, and an agent that fixes its own mistake) and **Governance** (approve one change, reject another, undo).
 

@@ -17,10 +17,10 @@ type Handler = (options: IsolatedRunOptions) => Promise<RunOutcome>;
 
 const NOW = new Date('2026-11-09T10:00:00Z');
 
-const raceOutcome: Handler = (options) =>
+const defaultOutcome: Handler = (options) =>
   Promise.resolve(
     makeOutcome({
-      runId: `race-${options.model}`,
+      runId: `run-${options.model}`,
       model: options.model,
       text: `Answer from ${options.model}`,
       ms: options.model === 'gemini-3.5-flash-lite' ? 1200 : 3400,
@@ -31,7 +31,7 @@ const raceOutcome: Handler = (options) =>
   );
 
 function setup(
-  handler: Handler = raceOutcome,
+  handler: Handler = defaultOutcome,
   { key = true, listError }: { key?: boolean; listError?: unknown } = {},
 ) {
   localStorage.clear();
@@ -91,136 +91,6 @@ describe('LabPage', () => {
     vi.restoreAllMocks();
   });
 
-  describe('model race', () => {
-    it('offers the Sprinter and the Operator selected, and the Strategist with a paid badge', async () => {
-      const { fixture, q, root } = setup();
-      await fixture.whenStable();
-      expect(q<HTMLInputElement>('race-model-gemini-3.5-flash-lite')?.checked).toBe(true);
-      expect(q<HTMLInputElement>('race-model-gemini-3.8-flash')?.checked).toBe(true);
-      expect(q<HTMLInputElement>('race-model-gemini-4-argon')?.checked).toBe(false);
-      expect(root.querySelectorAll('[data-testid="paid-badge"]')).toHaveLength(1);
-      expect(q('race-model-gemini-4-argon')?.closest('label')?.textContent).toContain(
-        '$2 / $10 per 1M',
-      );
-    });
-
-    it('shows a pre-run cost estimate that follows the selection', async () => {
-      const { fixture, q, click } = setup();
-      await fixture.whenStable();
-      const two = q('race-estimate')?.textContent ?? '';
-      expect(two).toMatch(/≈ \$0\.\d{3} for\s+2 models/);
-      await click('race-model-gemini-4-argon');
-      expect(q('race-estimate')?.textContent).toContain('3 models');
-      expect(q('race-estimate')?.textContent).not.toBe(two);
-    });
-
-    it('races the selected models and shows one card each, in catalog order', async () => {
-      const { fixture, q, click, root, runner } = setup();
-      await fixture.whenStable();
-      await click('race-run');
-      await vi.waitFor(() => expect(root.querySelectorAll('[data-status="done"]')).toHaveLength(2));
-      const cards = [...root.querySelectorAll('[data-testid^="race-card-"]')];
-      expect(cards.map((card) => card.getAttribute('data-testid'))).toEqual([
-        'race-card-gemini-3.5-flash-lite',
-        'race-card-gemini-3.8-flash',
-      ]);
-      const sprinter = q('race-card-gemini-3.5-flash-lite');
-      expect(sprinter?.textContent).toContain('Sprinter');
-      expect(sprinter?.querySelector('[data-testid="race-ms"]')?.textContent).toContain('1.2 s');
-      expect(sprinter?.querySelector('[data-testid="race-calls"]')?.textContent).toContain('2');
-      expect(sprinter?.querySelector('[data-testid="race-thinking"]')?.textContent).toContain(
-        '700',
-      );
-      expect(sprinter?.querySelector('[data-testid="race-cost"]')?.textContent).toContain(
-        '$0.0123',
-      );
-      expect(sprinter?.querySelector('[data-testid="race-answer"]')?.textContent).toContain(
-        'Answer from gemini-3.5-flash-lite',
-      );
-      expect(runner.run.mock.calls[0]?.[0].prompt).toBe(
-        'Which three deals should I prioritise this week and why?',
-      );
-    });
-
-    it('adds the Strategist card only after it was opted in', async () => {
-      const { fixture, q, click, root } = setup();
-      await fixture.whenStable();
-      await click('race-model-gemini-4-argon');
-      await click('race-run');
-      await vi.waitFor(() => expect(root.querySelectorAll('[data-status="done"]')).toHaveLength(3));
-      expect(q('race-card-gemini-4-argon')).not.toBeNull();
-    });
-
-    it('lets one model fail without hiding the others', async () => {
-      const { fixture, q, click, root } = setup(async (options) => {
-        if (options.model === 'gemini-3.5-flash-lite') {
-          throw new Error('Sprinter timed out');
-        }
-        return raceOutcome(options);
-      });
-      await fixture.whenStable();
-      await click('race-run');
-      await vi.waitFor(() => expect(root.querySelector('[data-status="done"]')).not.toBeNull());
-      expect(q('race-card-gemini-3.5-flash-lite')?.getAttribute('data-status')).toBe('failed');
-      expect(
-        q('race-card-gemini-3.5-flash-lite')?.querySelector('[role="alert"]')?.textContent,
-      ).toContain('Sprinter timed out');
-      expect(q('race-card-gemini-3.8-flash')?.getAttribute('data-status')).toBe('done');
-    });
-
-    it('opens the packets of a card in the inspector', async () => {
-      const { fixture, click, root, layout } = setup();
-      await fixture.whenStable();
-      await click('race-run');
-      await vi.waitFor(() => expect(root.querySelectorAll('[data-status="done"]')).toHaveLength(2));
-      root
-        .querySelector<HTMLButtonElement>(
-          '[aria-label="Open packets for Operator in the inspector"]',
-        )
-        ?.click();
-      expect(layout.inspectorOpen()).toBe(true);
-      expect(layout.inspectorRunId()).toBe('race-gemini-3.8-flash');
-    });
-
-    it('disables Run when no model is selected', async () => {
-      const { fixture, q, click } = setup();
-      await fixture.whenStable();
-      await click('race-model-gemini-3.5-flash-lite');
-      await click('race-model-gemini-3.8-flash');
-      expect(q<HTMLButtonElement>('race-run')?.disabled).toBe(true);
-      expect(q('race-estimate')?.textContent).toContain('0 models');
-    });
-
-    it('disables Run when the prompt is empty', async () => {
-      const { fixture, q } = setup();
-      await fixture.whenStable();
-      const prompt = q<HTMLTextAreaElement>('race-prompt');
-      if (prompt) {
-        prompt.value = '   ';
-        prompt.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      await fixture.whenStable();
-      expect(q<HTMLButtonElement>('race-run')?.disabled).toBe(true);
-    });
-
-    it('offers Stop while racing and Run again afterwards', async () => {
-      let open!: () => void;
-      const gate = new Promise<void>((resolve) => (open = resolve));
-      const { fixture, q, click, runner } = setup(async (options) => {
-        await gate;
-        return raceOutcome(options);
-      });
-      await fixture.whenStable();
-      await click('race-run');
-      await vi.waitFor(() => expect(q('race-stop')).not.toBeNull());
-      expect(q('race-run')).toBeNull();
-      expect(q<HTMLInputElement>('race-model-gemini-4-argon')?.disabled).toBe(true);
-      open();
-      await vi.waitFor(() => expect(q('race-run')).not.toBeNull());
-      expect(runner.run).toHaveBeenCalledTimes(2);
-    });
-  });
-
   describe('leaving or resetting while a run is active', () => {
     function hanging() {
       const signals: AbortSignal[] = [];
@@ -237,16 +107,6 @@ describe('LabPage', () => {
       return { signals, handler };
     }
 
-    it('aborts a race when the page is destroyed', async () => {
-      const { signals, handler } = hanging();
-      const { fixture, click } = setup(handler);
-      await fixture.whenStable();
-      await click('race-run');
-      await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
-      fixture.destroy();
-      expect(signals.every((signal) => signal.aborted)).toBe(true);
-    });
-
     it('aborts an eval batch when the page is destroyed', async () => {
       const { signals, handler } = hanging();
       const { fixture, click } = setup(handler);
@@ -257,11 +117,11 @@ describe('LabPage', () => {
       expect(signals.every((signal) => signal.aborted)).toBe(true);
     });
 
-    it('aborts an active race and stops queueing more on a presenter reset', async () => {
+    it('aborts an active eval batch and stops queueing more on a presenter reset', async () => {
       const { signals, handler } = hanging();
       const { fixture, click, runner } = setup(handler);
       await fixture.whenStable();
-      await click('race-run');
+      await click('eval-run');
       await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
       const started = runner.run.mock.calls.length;
       TestBed.inject(PresenterActions).reset();
@@ -273,22 +133,21 @@ describe('LabPage', () => {
 
   describe('without a valid key', () => {
     it('disables Run everywhere and explains why', async () => {
-      const { fixture, q } = setup(raceOutcome, { key: false });
+      const { fixture, q } = setup(defaultOutcome, { key: false });
       await fixture.whenStable();
       expect(q('key-required')?.textContent).toContain('Add your Gemini API key');
-      expect(q<HTMLButtonElement>('race-run')?.disabled).toBe(true);
       expect(q<HTMLButtonElement>('eval-run')?.disabled).toBe(true);
     });
 
     it('opens the key dialog from the notice', async () => {
-      const { fixture, click, open } = setup(raceOutcome, { key: false });
+      const { fixture, click, open } = setup(defaultOutcome, { key: false });
       await fixture.whenStable();
       await click('add-key');
       expect(open).toHaveBeenCalledOnce();
     });
 
     it('says so when Google rejected the key', async () => {
-      const { fixture, q, settings } = setup(raceOutcome, {
+      const { fixture, q, settings } = setup(defaultOutcome, {
         listError: new FakeApiError(401, 'bad'),
       });
       await vi.waitFor(() => {
@@ -298,7 +157,7 @@ describe('LabPage', () => {
       await fixture.whenStable();
       expect(q('key-required')?.textContent).toContain('rejected');
       expect(q('add-key')?.textContent).toContain('Replace API key');
-      expect(q<HTMLButtonElement>('race-run')?.disabled).toBe(true);
+      expect(q<HTMLButtonElement>('eval-run')?.disabled).toBe(true);
     });
 
     it('hides the notice when the key is fine', async () => {
@@ -477,12 +336,12 @@ describe('LabPage', () => {
     });
 
     it('is free of axe violations without a key', async () => {
-      const { fixture, root } = setup(raceOutcome, { key: false });
+      const { fixture, root } = setup(defaultOutcome, { key: false });
       await fixture.whenStable();
       await expectNoA11yViolations(root);
     });
 
-    it('is free of axe violations with race and eval results', async () => {
+    it('is free of axe violations with eval results', async () => {
       const failing: Handler = (options) =>
         Promise.resolve(
           evalAct(options.prompt) === 'act2'
@@ -491,10 +350,8 @@ describe('LabPage', () => {
         );
       const { fixture, root, click, q } = setup(failing);
       await fixture.whenStable();
-      await click('race-run');
       await click('eval-run');
       await vi.waitFor(() => expect(q('eval-progress')?.textContent).toContain('20 of 20 runs'));
-      await vi.waitFor(() => expect(root.querySelectorAll('[data-status="done"]')).toHaveLength(2));
       await click('eval-log-rows');
       await fixture.whenStable();
       await expectNoA11yViolations(root);

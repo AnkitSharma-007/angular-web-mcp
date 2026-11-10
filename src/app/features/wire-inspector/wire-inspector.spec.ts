@@ -323,7 +323,7 @@ describe('WireInspector', () => {
         );
       }
 
-      it('computes stats, model rows and human wait from the selected run only', async () => {
+      it('computes stats and human wait from the selected run only', async () => {
         const view = await render();
         seedTwoRuns(view);
         view.layout.showRun('run-a');
@@ -335,7 +335,6 @@ describe('WireInspector', () => {
         expect(stats).toContain('30 ms');
         expect(stats).not.toContain('90 ms');
         expect(stats).toContain('0 decisions');
-        expect(view.q('model-row-gemini-3.8-flash')?.textContent).toContain('0.001');
       });
 
       it('restores the global numbers when the filter is cleared', async () => {
@@ -350,7 +349,6 @@ describe('WireInspector', () => {
         expect(view.q('stats-scope')?.textContent).toContain('All retained traffic');
         expect(stats).toContain('33%');
         expect(stats).toContain('1 decisions');
-        expect(view.q('model-row-gemini-3.8-flash')?.textContent).toContain('0.011');
       });
 
       it('copies only the selected run, and says which run it is', async () => {
@@ -371,35 +369,6 @@ describe('WireInspector', () => {
         expect(exported.packets).toHaveLength(3);
         expect(exported.packets.every((packet) => packet.runId === 'run-a')).toBe(true);
       });
-    });
-
-    it('breaks the model calls down by model', async () => {
-      const view = await render();
-      seedPackets(view);
-      view.telemetry.record(
-        { channel: 'llm', method: 'generateContent', model: 'gemini-3.5-flash-lite' },
-        {
-          status: 'ok',
-          latencyMs: 500,
-          tokens: { input: 300, output: 20, thinking: 0 },
-          costUsd: 0.0003,
-        },
-      );
-      await view.openTab('Stats');
-      const row = view.q('model-row-gemini-3.8-flash');
-      expect(row?.textContent).toContain('1200');
-      expect(row?.textContent).toContain('80');
-      expect(row?.textContent).toContain('1,500 ms');
-      expect(row?.querySelector('[data-testid="model-cost"]')?.textContent).toContain('0.0012');
-      expect(view.q('model-row-gemini-3.5-flash-lite')).not.toBeNull();
-      expect(view.q('models-empty')).toBeNull();
-    });
-
-    it('says when there are no model calls', async () => {
-      const view = await render();
-      await view.openTab('Stats');
-      expect(view.q('models-empty')).not.toBeNull();
-      expect(view.q('by-model')).toBeNull();
     });
   });
 

@@ -16,19 +16,18 @@ The arc comes from [§5 of the blueprint](architecture-blueprint.md#5-live-demo-
 
 Hotkeys are ignored while focus is in a text field. After typing in the console, click the page background (or press `Tab` away) before using `1`–`4`.
 
-Models: **⚡ Sprinter** `gemini-3.5-flash-lite` for Act 1, **🛠️ Operator** `gemini-3.8-flash` for Acts 2–4. **🧠 Strategist** `gemini-4-argon` is paid-tier only and is not used on stage.
+Models: **⚡ Sprinter** `gemini-3.5-flash-lite` for Act 1, **🛠️ Operator** `gemini-3.8-flash` for Acts 2–4.
 
 ## The arc
 
-| Time        | Beat                   | Do                                                             |
-| ----------- | ---------------------- | -------------------------------------------------------------- |
-| 0:00–1:30   | Cold open              | Inspector → Tools tab, then `/about` and back                  |
-| 1:30–4:00   | Act 1 · Context ⚡     | `1`, Enter                                                     |
-| 4:00–7:00   | Act 2 · Multi-step 🛠️  | `2`, Enter                                                     |
-| 7:00–9:30   | Act 3 · Signal Form 🛠️ | `3`, Enter                                                     |
-| 9:30–12:00  | Act 4 · Governance 🛠️  | `4`, Enter, approve, reject, undo                              |
-| 12:00–14:00 | Act 5 · Wire + Race    | Lab → Model Race (⚡ vs 🛠️), then the inspector                |
-| 14:00–15:00 | Close                  | Code: registration styles, `withWebMcpTools()`, change history |
+| Time        | Beat                   | Do                                                                                     |
+| ----------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| 0:00–1:30   | Cold open              | Inspector → Tools tab, then `/about` and back                                          |
+| 1:30–4:00   | Act 1 · Context ⚡     | `1`, Enter                                                                             |
+| 4:00–7:00   | Act 2 · Multi-step 🛠️  | `2`, Enter                                                                             |
+| 7:00–9:30   | Act 3 · Signal Form 🛠️ | `3`, Enter                                                                             |
+| 9:30–12:00  | Act 4 · Governance 🛠️  | `4`, Enter, approve, reject, undo                                                      |
+| 12:00–14:00 | Close                  | Inspector packets, then code: registration styles, `withWebMcpTools()`, change history |
 
 ### Cold open (0:00–1:30)
 
@@ -83,19 +82,9 @@ Say: the tools belong to the route. When Angular destroys the route injector, it
 - **Undo:** click **Undo** in the snackbar (it stays for 8 seconds) or **Undo to here** in **Agent changes**. The chart rolls back.
 - **Say:** the gate sits inside the tool, so it protects external agents too. A rejection is a result, not an error, so the model adapts. There is no undo tool: only the human can undo.
 
-### Act 5 · Wire + Race (12:00–14:00)
+### Close (12:00–14:00)
 
-1. Press `Shift+R`, then open **Lab** in the dashboard nav.
-2. In **Model race**, leave ⚡ and 🛠️ ticked. Prompt: "Which three deals should I prioritise this week and why?" Press **Run race**.
-3. The runs go one after the other so the latencies are comparable. Each card shows time, tool calls, thinking tokens and cost.
-4. Press `` ` `` and show **Packets** (channel, latency, tokens, cost), then **Stats** (p50 / p95 and the per-model table).
-5. Say that 🧠 is one tick away, with a "paid tier" badge.
-
-JSON-RPC framing in the inspector is a display convention. WebMCP itself is an in-page API. Say so.
-
-### Close (14:00–15:00)
-
-Show the registration styles side by side: `provideExperimentalWebMcpTools` on a route, `withWebMcpTools()` on a store, and a Signal Form's `experimentalWebMcpTool`. Then the change history (a bounded undo stack, not a compliance log): **Agent changes** and the `human/undo` packet.
+Press `` ` `` and show **Packets** (channel, latency, tokens, cost) and the **Stats** tab (tool-call p50 / p95, human wait). JSON-RPC framing there is a display convention; WebMCP itself is an in-page API, so say so. Then show the registration styles side by side: `provideExperimentalWebMcpTools` on a route, `withWebMcpTools()` on a store, and a Signal Form's `experimentalWebMcpTool`. Then the change history (a bounded undo stack, not a compliance log): **Agent changes** and the `human/undo` packet.
 
 ## Pre-flight
 
@@ -116,7 +105,7 @@ Show the registration styles side by side: `provideExperimentalWebMcpTools` on a
 - [ ] **Chrome 158.0.8127.18** with `chrome://flags/#enable-webmcp-testing` enabled and Chrome relaunched.
 - [ ] The toolbar chip reads **WebMCP: native** (not `polyfill` or `shim`).
 - [ ] **API key** entered before the talk, never on the projector. The key dialog shows **valid**, and the key is restricted ([README](../README.md#bring-your-own-key)).
-- [ ] The key works for **⚡** and **🛠️**: run chips `1` and `2` once. Argon needs billing and isn't used on stage.
+- [ ] The key works for **⚡** and **🛠️**: run chips `1` and `2` once.
 - [ ] Notifications off, other tabs closed, browser zoom set.
 
 ### Five minutes before

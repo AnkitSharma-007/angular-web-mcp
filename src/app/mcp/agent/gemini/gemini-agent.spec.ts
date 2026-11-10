@@ -472,10 +472,10 @@ describe('GeminiAgent', () => {
 
     it('lets a run pick another model and maps its thinking level', async () => {
       const { agent, fake } = setup([{ text: 'hi' }]);
-      const events = await run(agent, 'go', { model: 'gemini-4-argon' });
-      expect(fake.createdChats[0]?.model).toBe('gemini-4-argon');
-      expect(fake.requests[0]?.config?.thinkingConfig?.thinkingLevel).toBe('HIGH');
-      expect(events.at(-1)).toMatchObject({ model: 'gemini-4-argon' });
+      const events = await run(agent, 'go', { model: 'gemini-3.5-flash-lite' });
+      expect(fake.createdChats[0]?.model).toBe('gemini-3.5-flash-lite');
+      expect(fake.requests[0]?.config?.thinkingConfig?.thinkingLevel).toBe('LOW');
+      expect(events.at(-1)).toMatchObject({ model: 'gemini-3.5-flash-lite' });
     });
 
     it('follows the configured model when none is given', async () => {
@@ -522,8 +522,7 @@ describe('GeminiAgent', () => {
         tokens: { input: 1000, output: 100, thinking: 400 },
       });
       expect(packets[0]?.costUsd).toBeGreaterThan(0);
-      expect(telemetry.byModel()[0]).toMatchObject({ model: 'gemini-3.8-flash', calls: 2 });
-      expect(telemetry.byModel()[0]?.tokens).toEqual(usage);
+      expect(packets[1]?.tokens).toEqual({ input: 1500, output: 200, thinking: 300 });
     });
 
     it('tags the packets with the run id', async () => {
@@ -543,7 +542,7 @@ describe('GeminiAgent', () => {
       ['a 401', new FakeApiError(401, 'Unauthorized'), 'auth'],
       ['a 403 about the key', new FakeApiError(403, 'API key was reported as leaked'), 'auth'],
       ['a 429', new FakeApiError(429, 'Resource exhausted'), 'quota'],
-      ['a 404', new FakeApiError(404, 'models/gemini-4-argon is not found'), 'model-access'],
+      ['a 404', new FakeApiError(404, 'models/gemini-0 is not found'), 'model-access'],
       [
         'a 403 about the model',
         new FakeApiError(403, 'You do not have access to this model'),

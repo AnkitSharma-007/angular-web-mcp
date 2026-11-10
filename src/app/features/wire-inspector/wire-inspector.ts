@@ -5,11 +5,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { McpToolGateway } from '../../mcp/agent/mcp-tool-gateway';
-import {
-  WireTelemetryStore,
-  computeModelStats,
-  computeWireStats,
-} from '../../mcp/telemetry/wire-telemetry-store';
+import { WireTelemetryStore, computeWireStats } from '../../mcp/telemetry/wire-telemetry-store';
 import { StatTile } from '../../shared/ui/stat-tile/stat-tile';
 import { copyText } from '../lab/download-text';
 import { LayoutStore } from '../layout/layout-store';
@@ -92,7 +88,6 @@ export class WireInspector {
   );
 
   protected readonly stats = computed(() => computeWireStats(this.packets()));
-  protected readonly byModel = computed(() => computeModelStats(this.packets()));
   protected readonly wait = computed(() => humanWait(this.packets()));
   protected readonly scopeLabel = computed(() => {
     const runId = this.layout.inspectorRunId();

@@ -8,6 +8,8 @@
 > 2. the live demo at **Google DevFest Mumbai** (12–15 min)
 >
 > **Status:** ✅ Approved. Implemented session by session (§8).
+>
+> **Revision 2026-11-10:** the Lab's Model Race, the 🧠 Strategist model, the free/paid-tier badges and the inspector's per-model table (`byModel`) were removed to keep the app focused on WebMCP. The Lab keeps the scored act evals. The session plan (§8) and the handoff notes record the app as it was built and still mention those pieces.
 
 ---
 
@@ -143,7 +145,7 @@ These are based on the [official Angular v22 rules](https://angular.dev/assets/c
 ```
 ╔═══════════════════════════════════════════════════════════════════════════════════╗
 ║ AGENTS   In-app GeminiAgent (BYOK, injectAsync)        External WebMCP agents      ║
-║          ⚡ 3.5-flash-lite · 🛠️ 3.8-flash · 🧠 4-argon     (Chrome agent, Tool        ║
+║          ⚡ 3.5-flash-lite · 🛠️ 3.8-flash                  (Chrome agent, Tool        ║
 ║          streaming · thoughts · usage → cost            Inspector ext.) — no key   ║
 ║          AgentSessionStore → McpToolGateway (only in-app registry client) ──┐      ║
 ╚══════════════════════════════╪════════════════════════════════════════════│══════╝
@@ -225,7 +227,7 @@ src/
     │   ├── agent-console/ agent-console · transcript-item · demo-prompts
     │   ├── settings/   settings-store · api-key-dialog · model-picker
     │   ├── wire-inspector/ wire-inspector · packet-detail · json-view
-    │   ├── lab/        lab-page · isolated-run · model-race · act-evals
+    │   ├── lab/        lab-page · isolated-run · act-evals
     │   └── about/      about-page
     └── shared/                 # LEAF: ui/ (glass-card, stat-tile, stage-badge) · pipes/compact-currency
 ```
@@ -338,7 +340,7 @@ export function withWebMcpTools(tools: () => readonly ToolDescriptor[]) {
 | `ProposalsStore`     | route | `withEntities<ProposalDraft>`, `saveDraft()`                                                                                                       |
 | `LayoutStore`        | root  | `consoleOpen`, `inspectorOpen`                                                                                                                     |
 | `SettingsStore`      | root  | `apiKey`, `remember`, `model`, `keyCheck` (`resource`), `forgetKey()`                                                                              |
-| `WireTelemetryStore` | root  | `withEntities<WirePacket>`, `begin`/`end`/`record`, `stats`, `byModel`, `pause`, `clear`, `exportJson`                                             |
+| `WireTelemetryStore` | root  | `withEntities<WirePacket>`, `begin`/`end`/`record`, `stats`, `pause`, `clear`, `exportJson`                                                        |
 | `AgentSessionStore`  | root  | `status` (`idle`, `running`, `awaiting-approval` or `error`; derived from `gate.pending`), `transcript`, `run`, `stop`, `lastUsage`, `lastCostUsd` |
 
 ---
@@ -502,34 +504,34 @@ interface WirePacket {
 ```
 
 - Packets are capped at 500.
-- `exportJson()` exports every packet. `exportJson(runId)` exports `{ runId, packets }` for that run only. The inspector's stats, model table, human wait and Copy JSON all follow the same run filter, and the Stats tab names the scope.
+- `exportJson()` exports every packet. `exportJson(runId)` exports `{ runId, packets }` for that run only. The inspector's stats, human wait and Copy JSON all follow the same run filter, and the Stats tab names the scope.
 - **Redaction:** the `x-goog-api-key` header, any `key=` value, and the raw key itself are replaced with `•••`.
 
 ### 4.7 Gemini models (verified 2026-11-09, [models](https://aistudio.google.com/docs/models), [pricing](https://aistudio.google.com/docs/pricing))
 
-| Persona               | Model ID                | `thinkingLevel` | Free tier | $ / 1M in / out                             | Role                                                                     |
-| --------------------- | ----------------------- | --------------- | --------- | ------------------------------------------- | ------------------------------------------------------------------------ |
-| ⚡ Sprinter           | `gemini-3.5-flash-lite` | low             | ✅        | 0.30 / 2.50                                 | Act 1, fast reads                                                        |
-| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium          | ✅        | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01)   | Acts 2–4                                                                 |
-| 🧠 Strategist         | `gemini-4-argon`        | high            | ❌        | 2.00 / 10.00 (4.00 / 20.00 from 2026-12-01) | The user's choice. Shown with a "paid tier" badge; **not used on stage** |
+| Persona               | Model ID                | `thinkingLevel` | $ / 1M in / out                           | Role              |
+| --------------------- | ----------------------- | --------------- | ----------------------------------------- | ----------------- |
+| ⚡ Sprinter           | `gemini-3.5-flash-lite` | low             | 0.30 / 2.50                               | Act 1, fast reads |
+| 🛠️ Operator (default) | `gemini-3.8-flash`      | medium          | 0.75 / 3.75 (1.50 / 7.50 from 2027-01-01) | Acts 2–4          |
 
-- All three have a ~1M-token context window. The contrasts are latency, reasoning depth, tool calls and cost.
-- The catalog stores dated `priceSchedule[]` entries. The picker never hides a model, and every run shows its cost.
-- A Gemini app subscription doesn't fund API calls. Users need an AI Studio key, and Argon needs billing enabled.
+- Both have a ~1M-token context window. The contrasts are latency, reasoning depth, tool calls and cost.
+- The catalog stores dated `priceSchedule[]` entries, and every run shows its cost.
+- A Gemini app subscription doesn't fund API calls. Users need an AI Studio key.
+- **Revision 2026-11-10:** the 🧠 Strategist (`gemini-4-argon`, paid tier only, never used on stage) was removed along with the free/paid badges. A stored `awm.model` that no longer exists falls back to the Operator.
 
 ---
 
 ## 5. Live-Demo Arc (12–15 min, all live)
 
-| Time        | Act                      | Prompt (chip)                                                                                               | Tools                                                               | Audience sees                                                                                            |
-| ----------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 0:00–1:30   | Cold open                | —                                                                                                           | —                                                                   | The Inspector Tools tab shows 8 tools. Go to `/about` and they vanish; come back and they return         |
-| 1:30–4:00   | **1 · Context** (⚡)     | "Give me a pipeline summary — where are we exposed this quarter?"                                           | getPipelineSummary, searchDeals                                     | Fast streamed answer and thoughts                                                                        |
-| 4:00–7:00   | **2 · Multi-step** (🛠️)  | "Show EMEA deals in Negotiation, give them 10% off, and move anything above 70% probability to Closed Won." | setDealFilter → searchDeals → applyBatchDiscount → updateDealStages | The table filters, bars animate, KPIs tick, and an UNDO snackbar appears                                 |
-| 7:00–9:30   | **3 · Signal Form** (🛠️) | "Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December."                 | openProposalDrawer → _toolchange_ → draftDealProposal ✗ → ✓         | A new tool appears, fields glow as they fill, and the agent fixes the start date                         |
-| 9:30–12:00  | **4 · Governance** (🛠️)  | "End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract."                      | applyBatchDiscount ⏸ Approve; terminateContract ⏸ Reject            | The agent pauses on a diff dialog and adapts. Then Undo rolls the chart back                             |
-| 12:00–14:00 | **5 · Wire + Race**      | Lab → Model Race (⚡ vs 🛠️): "Which three deals should I prioritise this week and why?"                     | read tools                                                          | Packets, then latency, tool calls, thinking tokens and $ side by side. Mention that 🧠 is one click away |
-| 14:00–15:00 | Close                    | —                                                                                                           | —                                                                   | The registration styles, `withWebMcpTools()`, and the change history                                     |
+| Time        | Act                      | Prompt (chip)                                                                                               | Tools                                                               | Audience sees                                                                                    |
+| ----------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 0:00–1:30   | Cold open                | —                                                                                                           | —                                                                   | The Inspector Tools tab shows 8 tools. Go to `/about` and they vanish; come back and they return |
+| 1:30–4:00   | **1 · Context** (⚡)     | "Give me a pipeline summary — where are we exposed this quarter?"                                           | getPipelineSummary, searchDeals                                     | Fast streamed answer and thoughts                                                                |
+| 4:00–7:00   | **2 · Multi-step** (🛠️)  | "Show EMEA deals in Negotiation, give them 10% off, and move anything above 70% probability to Closed Won." | setDealFilter → searchDeals → applyBatchDiscount → updateDealStages | The table filters, bars animate, KPIs tick, and an UNDO snackbar appears                         |
+| 7:00–9:30   | **3 · Signal Form** (🛠️) | "Draft a 24-month Enterprise renewal for Konkan Freight, 250 seats, starting mid-December."                 | openProposalDrawer → _toolchange_ → draftDealProposal ✗ → ✓         | A new tool appears, fields glow as they fill, and the agent fixes the start date                 |
+| 9:30–12:00  | **4 · Governance** (🛠️)  | "End of quarter: give Arcadia Bank 25% off and terminate the Monsoon Retail contract."                      | applyBatchDiscount ⏸ Approve; terminateContract ⏸ Reject            | The agent pauses on a diff dialog and adapts. Then Undo rolls the chart back                     |
+| 12:00–14:00 | **Wire**                 | Inspector: Packets and Stats                                                                                | —                                                                   | Channel, latency, tokens and $ per packet; tool-call p50 / p95 and human wait                    |
+| 14:00–15:00 | Close                    | —                                                                                                           | —                                                                   | The registration styles, `withWebMcpTools()`, and the change history                             |
 
 ### 5.1 WebMCP feature notes per act
 
@@ -1030,18 +1032,18 @@ interface ActEval {
 
 ### 8.11 Roll-up
 
-| #   | Theme                                     | Unlocks                    |
-| --- | ----------------------------------------- | -------------------------- |
-| 1   | Workspace, lint, CI, design system        | —                          |
-| 2   | Domain + SignalStore + `withAgentHistory` | —                          |
-| 3   | Dashboard views + route tree              | Visual baseline            |
-| 4   | Registry, `defineTool`, read tools        | Act 1 tools                |
-| 5   | Telemetry, `withWebMcpTools`, batch tools | Act 2 tools                |
-| 6   | HITL + Undo                               | Act 4 tools                |
-| 7   | Signal Form tool + discovery              | Act 3 tools                |
-| 8   | BYOK + Gemini agent                       | In-app live agent          |
-| 9   | Console + Lab                             | Acts 1–4 live, race, evals |
-| 10  | Inspector, acceptance, docs               | Act 5, run-sheet, README   |
+| #   | Theme                                     | Unlocks                      |
+| --- | ----------------------------------------- | ---------------------------- |
+| 1   | Workspace, lint, CI, design system        | —                            |
+| 2   | Domain + SignalStore + `withAgentHistory` | —                            |
+| 3   | Dashboard views + route tree              | Visual baseline              |
+| 4   | Registry, `defineTool`, read tools        | Act 1 tools                  |
+| 5   | Telemetry, `withWebMcpTools`, batch tools | Act 2 tools                  |
+| 6   | HITL + Undo                               | Act 4 tools                  |
+| 7   | Signal Form tool + discovery              | Act 3 tools                  |
+| 8   | BYOK + Gemini agent                       | In-app live agent            |
+| 9   | Console + Lab                             | Acts 1–4 live, evals         |
+| 10  | Inspector, acceptance, docs               | Wire beat, run-sheet, README |
 
 That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and rehearsal.
 
@@ -1056,7 +1058,7 @@ That is 10 sessions and 30 commits. Week 3 is reserved for tuning (§5.2) and re
 | The live model picks a different plan           | Sign-off ≥ 9/10; tool descriptions say _when_; Stop and `Shift+R`                                              |
 | Act 3 self-correction doesn't happen            | Framed as "if it slips, watch it fix itself". The Lab measures the rate                                        |
 | Slow venue network                              | Tethering, ⚡ for latency-sensitive beats, and streaming. No app fallback, by decision                         |
-| Users surprised by Argon cost                   | Price shown, dated schedule, per-run cost, opt-in in the race                                                  |
+| Users surprised by model cost                   | Price shown, dated schedule, per-run cost                                                                      |
 | Key visible on the projector                    | Masked input, entered before the talk, redacted in telemetry                                                   |
 | Duplicate tool names                            | Stores are provided once, the drawer is guarded by `@if`, and the fake registry resets in tests                |
 | `inject()` after `await` in a tool              | D5 and its regression test                                                                                     |
